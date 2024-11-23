@@ -81,13 +81,16 @@ class Qwen(Model):
             target.register_forward_hook(self.getActivations(layer_name))
 
 
-    def run_batch(self, batch_messages: List[dict]) -> List[str]:
-        """Run inference on a batch of messages."""
+    def run_batch(self, batch_df: pd.DataFrame) -> pd.DataFrame:
+        """Run inference on a batch of DataFrame rows."""
+        # Convert rows to messages
+        batch_messages = [self.encode_trial(row) for _, row in batch_df.iterrows()]
+        
         # Prepare inputs
         texts = [
             self.processor.apply_chat_template(
-                msg, 
-                tokenize=False, 
+                msg,
+                tokenize=False,
                 add_generation_prompt=True
             ) for msg in batch_messages
         ]
@@ -122,7 +125,10 @@ class Qwen(Model):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False
         )
-        return outputs
+        
+        # Add responses to DataFrame
+        batch_df['response'] = outputs
+        return batch_df
 
 
     def encode_trial(self, row) -> List[dict]:
@@ -138,30 +144,32 @@ class Qwen(Model):
             }
         ]
 
-    def run(self) -> List[str]:
-        """Run inference on all trials in batches."""
-        results = []
-        
+    def run(self) -> pd.DataFrame:
+        """Run inference on all trials in batches and return updated DataFrame."""
         # Split dataframe into batches
         batches = np.array_split(
-            self.task.results_df, 
+            self.task.results_df,
             np.ceil(len(self.task.results_df)/self.batch_size)
         )
         
         # Process each batch
+        processed_batches = []
         for i, batch_df in tqdm(enumerate(batches), total=len(batches)):
-            # Convert batch dataframe rows to messages
-            batch_messages = [self.encode_trial(row) for _, row in batch_df.iterrows()]
-            
             # Run inference on batch
-            batch_results = self.run_batch(batch_messages)
-            results.extend(batch_results)
+            processed_batch = self.run_batch(batch_df)
+            processed_batches.append(processed_batch)
             
             # Save activations based on save_interval
             if self.probe_layers and i % self.save_interval == 0:
                 self.save_activations()
         
-        return results
+        # Combine all processed batches
+        final_df = pd.concat(processed_batches, axis=0, ignore_index=True)
+        
+        # Save results to CSV
+        final_df.to_csv(self.task.results_path, index=False)
+        
+        return final_df
 
     def save_activations(self):
         """Save extracted activations to disk as PyTorch tensors and clear buffer."""
