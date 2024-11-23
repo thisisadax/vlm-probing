@@ -58,9 +58,9 @@ class Qwen(Model):
                 # Only collect if sequence length > 1 (not generation phase)
                 if output.size(1) > 1:
                     try:
-                        self.activations[name].append(output.detach().cpu().float().numpy())
+                        self.activations[name].append(output.detach().cpu())
                     except KeyError:
-                        self.activations[name] = [output.detach().cpu().float().numpy()]
+                        self.activations[name] = [output.detach().cpu()]
                     print(f'{name} Shape: {output.shape}')
                     
             except Exception as e:
@@ -161,7 +161,7 @@ class Qwen(Model):
         return results
 
     def save_activations(self):
-        """Save extracted activations to disk."""
+        """Save extracted activations to disk as PyTorch tensors."""
         outpath = os.path.join(
             self.task.output_dir, 
             self.task.task_name, 
@@ -171,16 +171,14 @@ class Qwen(Model):
         
         for layer, layer_activations in self.activations.items():
             try:
-                # Reshape and stack activations
-                activations = np.stack([
-                    act.reshape(min(self.batch_size, act.shape[0]), -1) 
-                    for act in layer_activations
-                ])
+                # Stack activations maintaining BxTxD shape
+                activations = torch.cat(layer_activations, dim=0)
                 
-                # Save to disk
-                save_path = os.path.join(outpath, f'{layer}_activations.npy')
-                np.save(save_path, activations)
+                # Save to disk as PyTorch tensor
+                save_path = os.path.join(outpath, f'{layer}_activations.pt')
+                torch.save(activations, save_path)
                 print(f'Saved activations for layer {layer} to {save_path}')
+                print(f'Final tensor shape: {activations.shape}')
                 
             except Exception as e:
                 print(f'Error saving {layer}: {str(e)}')
