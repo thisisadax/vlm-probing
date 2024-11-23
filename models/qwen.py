@@ -122,26 +122,45 @@ class Qwen(Model):
         return outputs
 
 
-    def run(self, messages: List[dict]) -> List[str]:
-        """Run inference on all messages in batches."""
+    def encode_trial(self, row) -> List[dict]:
+        """Convert a dataframe row into the expected message format."""
+        with open(self.task.prompt, 'r') as f:
+            prompt_text = f.read().strip()
+            
+        return [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": f"file://{row['path']}"},
+                    {"type": "text", "text": prompt_text},
+                ],
+            }
+        ]
+
+    def run(self) -> List[str]:
+        """Run inference on all trials in batches."""
         results = []
         
-        # Split messages into batches
-        num_batches = (len(messages) + self.batch_size - 1) // self.batch_size
-        batches = [
-            messages[i:i + self.batch_size] 
-            for i in range(0, len(messages), self.batch_size)
-        ]
+        # Split dataframe into batches
+        batches = np.array_split(
+            self.task.results_df, 
+            np.ceil(len(self.task.results_df)/self.batch_size)
+        )
         
         # Process each batch
-        for i, batch in tqdm(enumerate(batches), total=num_batches):
-            batch_results = self.run_batch(batch)
+        for i, batch_df in tqdm(enumerate(batches), total=len(batches)):
+            # Convert batch dataframe rows to messages
+            batch_messages = [self.encode_trial(row) for _, row in batch_df.iterrows()]
+            
+            # Run inference on batch
+            batch_results = self.run_batch(batch_messages)
             results.extend(batch_results)
             
             # Save activations periodically
             if self.probe_layers and i % 10 == 0:
                 self.save_activations()
-                
+        
         return results
 
     def save_activations(self):
