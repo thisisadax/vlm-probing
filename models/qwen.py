@@ -58,9 +58,9 @@ class Qwen(Model):
                 # Only collect if sequence length > 1 (not generation phase)
                 if output.size(1) > 1:
                     try:
-                        self.activations[name].append(output.detach().cpu().numpy())
+                        self.activations[name].append(output.detach().cpu().float().numpy())
                     except KeyError:
-                        self.activations[name] = [output.detach().cpu().numpy()]
+                        self.activations[name] = [output.detach().cpu().float().numpy()]
                     print(f'{name} Shape: {output.shape}')
                     
             except Exception as e:
@@ -124,16 +124,13 @@ class Qwen(Model):
 
     def encode_trial(self, row) -> List[dict]:
         """Convert a dataframe row into the expected message format."""
-        with open(self.task.prompt, 'r') as f:
-            prompt_text = f.read().strip()
-            
         return [
             {"role": "system", "content": "You are a helpful assistant."},
             {
                 "role": "user",
                 "content": [
                     {"type": "image", "image": f"file://{row['path']}"},
-                    {"type": "text", "text": prompt_text},
+                    {"type": "text", "text": self.task.prompt},
                 ],
             }
         ]
