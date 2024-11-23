@@ -179,8 +179,12 @@ class Qwen(Model):
                 # Stack activations maintaining BxTxD shape
                 activations = torch.cat(layer_activations, dim=0)
                 
+                # Create layer-specific directory
+                layer_dir = os.path.join(outpath, layer)
+                os.makedirs(layer_dir, exist_ok=True)
+                
                 # Save to disk as PyTorch tensor with unique counter
-                save_path = os.path.join(outpath, f'{layer}_{self.save_counter:04d}.pt')
+                save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
                 torch.save(activations, save_path)
                 print(f'Saved activations for layer {layer} to {save_path}')
                 print(f'Tensor shape: {activations.shape}')
