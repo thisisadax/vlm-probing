@@ -33,7 +33,6 @@ class Qwen(Model):
         self.probe_layers = probe_layers
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.activations = {}
-        self.save_counter += 1
         self.save_counter = 0
         self.save_interval = save_interval
         self.prompt = Path
@@ -186,8 +185,6 @@ class Qwen(Model):
                 # Save to disk as PyTorch tensor with unique counter
                 save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
                 torch.save(activations, save_path)
-                print(f'Saved activations for layer {layer} to {save_path}')
-                print(f'Tensor shape: {activations.shape}')
                 
             except Exception as e:
                 print(f'Error saving {layer}: {str(e)}')
