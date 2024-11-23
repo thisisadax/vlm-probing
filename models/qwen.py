@@ -24,7 +24,8 @@ class Qwen(Model):
         batch_size: int = 32,
         probe_layers: Dict = None,
         device: str = None,
-        model_name: str = None
+        model_name: str = None,
+        save_interval: int = 10
     ):
         super().__init__(task)
         self.max_new_tokens = max_tokens
@@ -32,6 +33,9 @@ class Qwen(Model):
         self.probe_layers = probe_layers
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.activations = {}
+        self.save_counter += 1
+        self.save_counter = 0
+        self.save_interval = save_interval
         self.prompt = Path
         self.model_name = model_name
         
@@ -154,8 +158,8 @@ class Qwen(Model):
             batch_results = self.run_batch(batch_messages)
             results.extend(batch_results)
             
-            # Save activations periodically
-            if self.probe_layers and i % 10 == 0:
+            # Save activations based on save_interval
+            if self.probe_layers and i % self.save_interval == 0:
                 self.save_activations()
         
         return results
@@ -174,8 +178,8 @@ class Qwen(Model):
                 # Stack activations maintaining BxTxD shape
                 activations = torch.cat(layer_activations, dim=0)
                 
-                # Save to disk as PyTorch tensor (overwriting previous saves)
-                save_path = os.path.join(outpath, f'activations_{layer}.pt')
+                # Save to disk as PyTorch tensor with unique counter
+                save_path = os.path.join(outpath, f'activations_{layer}_{self.save_counter:04d}.pt')
                 torch.save(activations, save_path)
                 print(f'Saved activations for layer {layer} to {save_path}')
                 print(f'Tensor shape: {activations.shape}')
