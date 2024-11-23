@@ -161,7 +161,7 @@ class Qwen(Model):
         return results
 
     def save_activations(self):
-        """Save extracted activations to disk as PyTorch tensors."""
+        """Save extracted activations to disk as PyTorch tensors and clear buffer."""
         outpath = os.path.join(
             self.task.output_dir, 
             self.task.task_name, 
@@ -174,12 +174,15 @@ class Qwen(Model):
                 # Stack activations maintaining BxTxD shape
                 activations = torch.cat(layer_activations, dim=0)
                 
-                # Save to disk as PyTorch tensor
-                save_path = os.path.join(outpath, f'{layer}_activations.pt')
+                # Save to disk as PyTorch tensor (overwriting previous saves)
+                save_path = os.path.join(outpath, f'activations_{layer}.pt')
                 torch.save(activations, save_path)
                 print(f'Saved activations for layer {layer} to {save_path}')
-                print(f'Final tensor shape: {activations.shape}')
+                print(f'Tensor shape: {activations.shape}')
                 
             except Exception as e:
                 print(f'Error saving {layer}: {str(e)}')
                 traceback.print_exc()
+        
+        # Clear the activation buffer after saving
+        self.activations = {}
