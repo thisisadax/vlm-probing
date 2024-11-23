@@ -168,8 +168,9 @@ class Qwen(Model):
         """Save extracted activations to disk as PyTorch tensors and clear buffer."""
         outpath = os.path.join(
             self.task.output_dir, 
-            self.task.task_name, 
-            Path(self.task.model_name)
+            self.task.task_name,
+            Path(self.task.model_name),
+            'activations'
         )
         os.makedirs(outpath, exist_ok=True)
         
@@ -179,7 +180,7 @@ class Qwen(Model):
                 activations = torch.cat(layer_activations, dim=0)
                 
                 # Save to disk as PyTorch tensor with unique counter
-                save_path = os.path.join(outpath, f'activations_{layer}_{self.save_counter:04d}.pt')
+                save_path = os.path.join(outpath, f'{layer}_{self.save_counter:04d}.pt')
                 torch.save(activations, save_path)
                 print(f'Saved activations for layer {layer} to {save_path}')
                 print(f'Tensor shape: {activations.shape}')
