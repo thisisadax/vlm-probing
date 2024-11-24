@@ -42,6 +42,9 @@ class LightningProbe(pl.LightningModule):
         pooler = AttentionPooler(input_dim, hidden_dim)
         probe_mlp = SimpleMLP(hidden_dim, hidden_dim, output_dim)
         self.net = Probe(pooler, probe_mlp)
+
+        # Used to store attention patterns for visualization.
+        self.attention_patterns = []
         
     def configure_optimizers(self):
         optimizer = optim.AdamW(
@@ -56,8 +59,8 @@ class LightningProbe(pl.LightningModule):
         )
         return [optimizer], [lr_scheduler]
     
-    def forward(self, xs):
-        if self.hparams.visualize_attention:
+    def forward(self, xs, visualize_attention=False):
+        if visualize_attention:
             out, attention = self.net(xs, return_attention=True)
             return out, attention
         return self.net(xs)
@@ -80,29 +83,27 @@ class LightningProbe(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         if self.hparams.visualize_attention:
             xs, ys = batch
-            logits, attention = self.forward(xs)
+            logits, attention = self.forward(xs, visualize_attention=True)
             loss = F.cross_entropy(logits, ys)
             self.log('val_loss', loss)
             accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
             self.log('val_acc', accuracy)
-            return {'loss': loss, 'attention': attention}
+            self.attention_patterns.append(attention)
         return self.loss(batch, mode='val')
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         if not self.hparams.visualize_attention:
             return
             
         # Collect attention patterns from first 25 samples
-        attention_patterns = torch.cat([x['attention'] for x in outputs])[:25]
-        
-        # Remove first and last token attention
-        attention_patterns = attention_patterns[:, 1:-1]
+        attention_patterns = torch.cat(self.attention_patterns)[:25]
+        attention_patterns = attention_patterns[:, 1:-1] # Remove first and last token attention
         
         # Check if remaining sequence length is square
         seq_len = attention_patterns.shape[1]
         side_len = int(np.sqrt(seq_len))
         if side_len * side_len != seq_len:
-            print(f"Warning: Sequence length {seq_len} is not a perfect square")
+            print(f'Warning: Sequence length {seq_len} is not a perfect square')
             return
             
         # Create 5x5 grid of attention patterns
@@ -123,6 +124,7 @@ class LightningProbe(pl.LightningModule):
                                        plot_img.transpose(2,0,1),
                                        self.current_epoch)
         plt.close()
+        return None
 
     def test_step(self, batch, batch_idx):
         return self.loss(batch, mode='test')
