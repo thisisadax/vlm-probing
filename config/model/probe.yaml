@@ -1,0 +1,11 @@
+_target_: probes.LightningProbe
+
+# Model architecture
+input_dim: 1024  # Should match the dimension of your model's hidden states
+hidden_dim: 256
+output_dim: 10   # Should match number of classes in your task
+
+# Training hyperparameters
+lr: 5e-4
+weight_decay: 1e-6
+max_epochs: 20
