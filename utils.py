@@ -1,7 +1,6 @@
 import numpy as np
-import numpy as np
 from PIL import Image
-from typing import List
+from typing import List, Tuple
 import hydra
 from omegaconf import DictConfig
 

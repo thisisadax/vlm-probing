@@ -7,7 +7,7 @@ import matplotlib.colors as mcolors
 import itertools
 
 from tasks.task import Task
-from utils import paste_shape, color_shape
+from utils import paste_shape, color_shape, place_shapes
 
 class SceneDescription(Task):
     """Task class for generating scenes with multiple objects of varying colors and shapes"""
