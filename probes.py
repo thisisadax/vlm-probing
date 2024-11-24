@@ -2,6 +2,9 @@ from abc import ABC, abstractmethod
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
+import matplotlib.pyplot as plt
+import numpy as np
+from torchvision.utils import make_grid
 from torch.nn import Module, Linear, ModuleList, Sequential, Tanh, LayerNorm, Dropout, ReLU
 from torch import optim
 
@@ -12,7 +15,11 @@ class Probe(torch.nn.Module):
         self.pooler = pooler
         self.probe = probe_mlp
         
-    def forward(self, x):
+    def forward(self, x, return_attention=False):
+        if return_attention:
+            xs, attention = self.pooler(x, return_att_vectors=True)
+            ys = self.probe(xs)
+            return ys, attention
         xs = self.pooler(x)
         ys = self.probe(xs)
         return ys
@@ -50,6 +57,9 @@ class LightningProbe(pl.LightningModule):
         return [optimizer], [lr_scheduler]
     
     def forward(self, xs):
+        if self.hparams.visualize_attention:
+            out, attention = self.net(xs, return_attention=True)
+            return out, attention
         return self.net(xs)
 
     def loss(self, batch, mode='train'):
@@ -68,7 +78,51 @@ class LightningProbe(pl.LightningModule):
         return self.loss(batch, mode='train')
 
     def validation_step(self, batch, batch_idx):
+        if self.hparams.visualize_attention:
+            xs, ys = batch
+            logits, attention = self.forward(xs)
+            loss = F.cross_entropy(logits, ys)
+            self.log('val_loss', loss)
+            accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
+            self.log('val_acc', accuracy)
+            return {'loss': loss, 'attention': attention}
         return self.loss(batch, mode='val')
+
+    def validation_epoch_end(self, outputs):
+        if not self.hparams.visualize_attention:
+            return
+            
+        # Collect attention patterns from first 25 samples
+        attention_patterns = torch.cat([x['attention'] for x in outputs])[:25]
+        
+        # Remove first and last token attention
+        attention_patterns = attention_patterns[:, 1:-1]
+        
+        # Check if remaining sequence length is square
+        seq_len = attention_patterns.shape[1]
+        side_len = int(np.sqrt(seq_len))
+        if side_len * side_len != seq_len:
+            print(f"Warning: Sequence length {seq_len} is not a perfect square")
+            return
+            
+        # Create 5x5 grid of attention patterns
+        fig, axes = plt.subplots(5, 5, figsize=(15, 15))
+        for idx, (attention, ax) in enumerate(zip(attention_patterns, axes.flat)):
+            # Reshape to square
+            att_map = attention.reshape(side_len, side_len).cpu().numpy()
+            im = ax.imshow(att_map, cmap='viridis')
+            ax.axis('off')
+            
+        plt.tight_layout()
+        
+        # Convert plot to tensor for tensorboard
+        fig.canvas.draw()
+        plot_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        plot_img = plot_img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        self.logger.experiment.add_image('attention_patterns', 
+                                       plot_img.transpose(2,0,1),
+                                       self.current_epoch)
+        plt.close()
 
     def test_step(self, batch, batch_idx):
         return self.loss(batch, mode='test')
@@ -87,8 +141,8 @@ class AttentionPooler(Module):
         '''
         :param hidden_states: the hidden states of the subject model with shape (N, L, D), i.e. batch size,
         sequence length and hidden dimension.
-        span's position in the batch, and [a, b) the span interval along the sequence dimension.
-        :return: a tensor of pooled span embeddings of dimension `hidden_dim`.
+        :param return_att_vectors: if True, return attention vectors along with pooled embeddings
+        :return: a tensor of pooled span embeddings of dimension `hidden_dim`, and optionally attention vectors
         '''
         return self._pool(hidden_states, return_att_vectors=return_att_vectors)
 
