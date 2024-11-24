@@ -31,14 +31,13 @@ class Qwen(Model):
         super().__init__(task)
         self.max_new_tokens = max_tokens
         self.batch_size = batch_size
-        self.probe_layers = probe_layers
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.activations = {}
         self.save_counter = 1
         self.save_interval = save_interval
         self.prompt = Path
         self.model_name = model_name
-        
+
         # Initialize model and processor
         self.model = Qwen2VLForConditionalGeneration.from_pretrained('Qwen/Qwen2-VL-7B-Instruct', 
                                                                      torch_dtype='auto', 
@@ -46,10 +45,27 @@ class Qwen(Model):
                                                                      local_files_only=True)
         self.processor = AutoProcessor.from_pretrained('Qwen/Qwen2-VL-7B-Instruct')
         self.model.to(self.device)
+
+        # Set probe layers - either use provided config or detect all MLPs
+        self.probe_layers = probe_layers if probe_layers is not None else self.detect_all_mlp_layers()
         
         # Register hooks if probe_layers are specified
         if self.probe_layers:
             self.register_hooks()
+
+    def detect_all_mlp_layers(self) -> Dict:
+        """Detect all MLP down_proj layers in the model and create a probe configuration."""
+        probe_config = {}
+        
+        # Get number of layers in the model
+        num_layers = len(self.model.model.layers)
+        
+        # Create probe config for each layer
+        for layer_idx in range(num_layers):
+            layer_name = f'layer-{layer_idx}'
+            probe_config[layer_name] = ['model', 'layers', str(layer_idx), 'mlp', 'down_proj']
+            
+        return probe_config
     
 
     def getActivations(self, name):
