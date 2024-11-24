@@ -54,7 +54,8 @@ class ProbeDatasets(ABC):
         test_prop: float = 0.15,
         val_prop: float = 0.15,
         batch_size: int = 32,
-        random_seed: int = 42
+        random_seed: int = 42,
+        exclude_text: bool = False
     ):
         self.task = task_name
         self.model_name = model_name
@@ -64,6 +65,8 @@ class ProbeDatasets(ABC):
         self.val_prop = val_prop
         self.batch_size = batch_size
         self.random_seed = random_seed
+        self.exclude_text = exclude_text
+        self.image_mask = None
         
         # Validate split proportions
         if not np.isclose(train_prop + test_prop + val_prop, 1.0):
@@ -92,7 +95,26 @@ class ProbeDatasets(ABC):
         for file in files:
             tensor = torch.load(file, weights_only=True)
             tensors.append(tensor)
-        return torch.cat(tensors, dim=0).float()
+        features = torch.cat(tensors, dim=0).float()
+
+        if self.exclude_text:
+            mask_path = f'output/{self.task_name}/{self.model_name}/image_mask.pt'
+            if not os.path.exists(mask_path):
+                raise FileNotFoundError(f'Image mask file not found: {mask_path}')
+            
+            self.image_mask = torch.load(mask_path, weights_only=True)
+            
+            # Check mask dimensionality
+            if self.image_mask.shape[-1] != features.shape[-1]:
+                raise ValueError(
+                    f'Mask dimension ({self.image_mask.shape[-1]}) does not match '
+                    f'features dimension ({features.shape[-1]})'
+                )
+            
+            # Apply mask to features
+            features = features * self.image_mask
+
+        return features
     
     def _create_split_indices(self, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
