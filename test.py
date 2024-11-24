@@ -57,14 +57,13 @@ def main():
     # Create image token mask
     image_mask = torch.zeros_like(input_ids, dtype=torch.bool)
     
-    # Find image tokens
-    # Note: You might need to adjust these tokens based on actual Qwen2-VL implementation
-    image_start_token = processor.tokenizer.convert_tokens_to_ids(['<image>'])[0]
-    image_end_token = processor.tokenizer.convert_tokens_to_ids(['</image>'])[0]
+    # Find image tokens using Qwen's special vision tokens
+    image_start_token = processor.tokenizer.convert_tokens_to_ids(['<|vision_start|>'])[0]
+    image_end_token = processor.tokenizer.convert_tokens_to_ids(['<|vision_end|>'])[0]
     
     # Find positions of image tokens
-    start_indices = (input_ids == image_start_token).nonzero()
-    end_indices = (input_ids == image_end_token).nonzero()
+    start_indices = torch.where(input_ids == image_start_token)[0]
+    end_indices = torch.where(input_ids == image_end_token)[0]
     
     # Set mask for image tokens
     for start, end in zip(start_indices, end_indices):
