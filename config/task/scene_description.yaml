@@ -1,0 +1,21 @@
+defaults:
+  - default
+_target_: tasks.scene_description.SceneDescription
+task_name: 'scene_description'  # Name of the task
+
+# Object parameters
+min_objects: 1
+max_objects: 4
+n_trials: 200  # Number of trials to generate per condition
+size: 40  # Size of individual shapes
+
+# Canvas parameters
+canvas_size: [256, 256]
+
+# Available shapes and colors
+shapes: ['circle', 'square', 'triangle']
+shape_inds: [0, 1, 2]  # Indices corresponding to shapes in imgs.npy
+colors: ['red', 'blue', 'green', 'yellow']
+
+# Prompt configuration
+prompt_path: '${.root_dir}/prompts/scene_description.txt'
