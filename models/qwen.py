@@ -27,6 +27,7 @@ class Qwen(Model):
         model_name: str = None,
         save_interval: int = 10
     ):
+        self.image_masks = []
         super().__init__(task)
         self.max_new_tokens = max_tokens
         self.batch_size = batch_size
@@ -80,6 +81,24 @@ class Qwen(Model):
             target.register_forward_hook(self.getActivations(layer_name))
 
 
+    def get_image_mask(self, input_ids: torch.Tensor) -> torch.Tensor:
+        """Compute binary mask indicating image token positions."""
+        image_mask = torch.zeros_like(input_ids, dtype=torch.bool)
+        
+        # Get vision special token IDs
+        image_start_token = self.processor.tokenizer.convert_tokens_to_ids(['<|vision_start|>'])[0]
+        image_end_token = self.processor.tokenizer.convert_tokens_to_ids(['<|vision_end|>'])[0]
+        
+        # Find positions of image tokens
+        start_indices = torch.where(input_ids == image_start_token)[0]
+        end_indices = torch.where(input_ids == image_end_token)[0]
+        
+        # Set mask for image tokens
+        for start, end in zip(start_indices, end_indices):
+            image_mask[start:end+1] = True
+            
+        return image_mask
+
     def run_batch(self, batch_df: pd.DataFrame) -> pd.DataFrame:
         """Run inference on a batch of DataFrame rows."""
         # Convert rows to messages
@@ -104,6 +123,10 @@ class Qwen(Model):
             padding=True,
             return_tensors='pt'
         ).to(self.device)
+
+        # Compute image masks for the batch
+        batch_masks = [self.get_image_mask(ids) for ids in inputs.input_ids]
+        self.image_masks.extend(batch_masks)
 
         # Generate outputs
         with torch.no_grad():
@@ -168,6 +191,18 @@ class Qwen(Model):
         
         # Save results to CSV
         final_df.to_csv(self.task.results_path, index=False)
+        
+        # Save concatenated image masks
+        if self.image_masks:
+            mask_tensor = torch.cat(self.image_masks, dim=0)
+            mask_path = os.path.join(
+                self.task.output_dir,
+                self.task.task_name,
+                Path(self.task.model_name),
+                'image_mask.pt'
+            )
+            os.makedirs(os.path.dirname(mask_path), exist_ok=True)
+            torch.save(mask_tensor, mask_path)
         
         return final_df
 
