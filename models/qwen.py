@@ -33,7 +33,7 @@ class Qwen(Model):
         self.probe_layers = probe_layers
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.activations = {}
-        self.save_counter = 0
+        self.save_counter = 1
         self.save_interval = save_interval
         self.prompt = Path
         self.model_name = model_name
@@ -42,8 +42,7 @@ class Qwen(Model):
         self.model = Qwen2VLForConditionalGeneration.from_pretrained('Qwen/Qwen2-VL-7B-Instruct', 
                                                                      torch_dtype='auto', 
                                                                      device_map='auto', 
-                                                                     local_files_only=True,
-                                                                     trust_remote_code=True)
+                                                                     local_files_only=True)
         self.processor = AutoProcessor.from_pretrained('Qwen/Qwen2-VL-7B-Instruct')
         self.model.to(self.device)
         
@@ -64,7 +63,7 @@ class Qwen(Model):
                         self.activations[name].append(output.detach().cpu())
                     except KeyError:
                         self.activations[name] = [output.detach().cpu()]
-                    print(f'{name} Shape: {output.shape}')
+                    #print(f'{name} Shape: {output.shape}')
                     
             except Exception as e:
                 print(f'Error in hook for {name}: {str(e)}')
@@ -160,8 +159,9 @@ class Qwen(Model):
             processed_batches.append(processed_batch)
             
             # Save activations based on save_interval
-            if self.probe_layers and i % self.save_interval == 0:
+            if self.probe_layers and (i+1) % self.save_interval == 0:
                 self.save_activations()
+                self.save_counter += 1
         
         # Combine all processed batches
         final_df = pd.concat(processed_batches, axis=0, ignore_index=True)
