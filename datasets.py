@@ -104,15 +104,11 @@ class ProbeDatasets(ABC):
             
             self.image_mask = torch.load(mask_path, weights_only=True)
             
-            # Check mask dimensionality
-            if self.image_mask.shape[-1] != features.shape[-1]:
-                raise ValueError(
-                    f'Mask dimension ({self.image_mask.shape[-1]}) does not match '
-                    f'features dimension ({features.shape[-1]})'
-                )
+            # Get indices where mask is 1 (image tokens)
+            image_indices = torch.where(self.image_mask[0] == 1)[0]
             
-            # Apply mask to features
-            features = features * self.image_mask
+            # Select only the image token features for each sample
+            features = features[:, image_indices]
 
         return features
     
