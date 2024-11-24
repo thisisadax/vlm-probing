@@ -6,6 +6,74 @@ from torch.nn import Module, Linear, ModuleList, Sequential, Tanh, LayerNorm, Dr
 from torch import optim
 
 
+class Probe(torch.nn.Module):
+    def __init__(self, pooler, probe_mlp):
+        super().__init__()
+        self.pooler = pooler
+        self.probe = probe_mlp
+        
+    def forward(self, x):
+        xs = self.pooler(x)
+        ys = self.probe(xs)
+        return ys
+
+class LightningProbe(pl.LightningModule):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int, 
+        output_dim: int,
+        lr: float = 5e-4,
+        weight_decay: float = 1e-6,
+        max_epochs: int = 20,
+        visualize_attention: bool = False
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+        
+        # Create the network
+        pooler = AttentionPooler(input_dim, hidden_dim)
+        probe_mlp = SimpleMLP(hidden_dim, hidden_dim, output_dim)
+        self.net = Probe(pooler, probe_mlp)
+        
+    def configure_optimizers(self):
+        optimizer = optim.AdamW(
+            self.parameters(),
+            lr=self.hparams.lr,
+            weight_decay=self.hparams.weight_decay
+        )
+        lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=self.hparams.max_epochs,
+            eta_min=self.hparams.lr/self.hparams.max_epochs
+        )
+        return [optimizer], [lr_scheduler]
+    
+    def forward(self, xs):
+        return self.net(xs)
+
+    def loss(self, batch, mode='train'):
+        xs, ys = batch
+        logits = self.forward(xs)
+        loss = F.cross_entropy(logits, ys)
+        
+        # Log metrics
+        self.log(f'{mode}_loss', loss)
+        accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
+        self.log(f'{mode}_acc', accuracy)
+        
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        return self.loss(batch, mode='train')
+
+    def validation_step(self, batch, batch_idx):
+        return self.loss(batch, mode='val')
+
+    def test_step(self, batch, batch_idx):
+        return self.loss(batch, mode='test')
+
+
 class AttentionPooler(Module):
     '''Attention pooling as described in https://arxiv.org/pdf/1905.06316.pdf (page 14, C).
     '''
@@ -110,68 +178,3 @@ class HewittMLP(MLP):
             Dropout(self.dropout),
             Linear(self.hidden_dim, self.output_dim)
         )
-class Probe(torch.nn.Module):
-    def __init__(self, pooler, probe_mlp):
-        super().__init__()
-        self.pooler = pooler
-        self.probe = probe_mlp
-        
-    def forward(self, x):
-        xs = self.pooler(x)
-        ys = self.probe(xs)
-        return ys
-
-class LightningProbe(pl.LightningModule):
-    def __init__(
-        self,
-        input_dim: int,
-        hidden_dim: int, 
-        output_dim: int,
-        lr: float = 5e-4,
-        weight_decay: float = 1e-6,
-        max_epochs: int = 20
-    ):
-        super().__init__()
-        self.save_hyperparameters()
-        
-        # Create the network
-        pooler = AttentionPooler(input_dim, hidden_dim)
-        probe_mlp = SimpleMLP(hidden_dim, hidden_dim, output_dim)
-        self.net = Probe(pooler, probe_mlp)
-        
-    def configure_optimizers(self):
-        optimizer = optim.AdamW(
-            self.parameters(),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay
-        )
-        lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer,
-            T_max=self.hparams.max_epochs,
-            eta_min=self.hparams.lr/self.hparams.max_epochs
-        )
-        return [optimizer], [lr_scheduler]
-    
-    def forward(self, xs):
-        return self.net(xs)
-
-    def loss(self, batch, mode='train'):
-        xs, ys = batch
-        logits = self.forward(xs)
-        loss = F.cross_entropy(logits, ys)
-        
-        # Log metrics
-        self.log(f'{mode}_loss', loss)
-        accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
-        self.log(f'{mode}_acc', accuracy)
-        
-        return loss
-
-    def training_step(self, batch, batch_idx):
-        return self.loss(batch, mode='train')
-
-    def validation_step(self, batch, batch_idx):
-        return self.loss(batch, mode='val')
-
-    def test_step(self, batch, batch_idx):
-        return self.loss(batch, mode='test')
