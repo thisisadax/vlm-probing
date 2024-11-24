@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+import os
+from pathlib import Path
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
@@ -30,6 +32,8 @@ class LightningProbe(pl.LightningModule):
         input_dim: int,
         hidden_dim: int, 
         output_dim: int,
+        task_name: str,
+        model_name: str,
         lr: float = 5e-4,
         weight_decay: float = 1e-6,
         max_epochs: int = 20,
@@ -116,13 +120,12 @@ class LightningProbe(pl.LightningModule):
             
         plt.tight_layout()
         
-        # Convert plot to tensor for tensorboard
-        fig.canvas.draw()
-        plot_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-        plot_img = plot_img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-        self.logger.experiment.add_image('attention_patterns', 
-                                       plot_img.transpose(2,0,1),
-                                       self.current_epoch)
+        # Save plot to file
+        output_dir = Path(f"output/{self.hparams.task_name}/{self.hparams.model_name}/attention_patterns")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        output_path = output_dir / f"epoch-{self.current_epoch}.png"
+        plt.savefig(output_path)
         plt.close()
         return None
 
