@@ -22,10 +22,21 @@ def setup(cfg: DictConfig) -> Tuple:
     # Set seeds
     pl.seed_everything(cfg.seed)
     
-    # Load model and dataset
-    model = hydra.utils.instantiate(cfg.model)
+    # Load dataset first to determine dimensions
     dataset = hydra.utils.instantiate(cfg.dataset)
     train_loader, test_loader, val_loader = dataset.load()
+    
+    # Get dimensions from the dataset
+    input_dim = train_loader.dataset.features.shape[-1]
+    output_dim = train_loader.dataset.label_dim
+    
+    # Initialize model with dimensions from dataset
+    model = hydra.utils.instantiate(
+        cfg.model,
+        input_dim=input_dim,
+        hidden_dim=input_dim//2,  # Using half of input_dim as hidden_dim
+        output_dim=output_dim
+    )
     
     return model, train_loader, test_loader, val_loader
 
