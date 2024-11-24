@@ -62,27 +62,24 @@ class SceneDescription(Task):
                 if selected_features is None:
                     continue
                     
-                # Create canvas and initialize arrays for positions and sizes
-                canvas = Image.new('RGB', self.canvas_size, 'white')
-                positions = np.zeros((n_objects, 2))
-                sizes = np.full(n_objects, self.size)
-                
-                # Place each object on the canvas
-                for i, (shape_name, color_name) in enumerate(selected_features):
-                    # Get shape image and color it
+                # Prepare all colored shapes
+                colored_shapes = []
+                for shape_name, color_name in selected_features:
                     shape_idx = self.shape_map[shape_name]
                     shape_img = self.shape_imgs[shape_idx]
                     colored_shape = color_shape(shape_img, self.colors[color_name])
-                    
-                    # Try to place the shape
-                    try:
-                        positions = paste_shape(
-                            colored_shape, positions, sizes, canvas, i,
-                            img_size=self.size
-                        )
-                    except ValueError:
-                        print(f"Warning: Failed to place object {i} in trial {trial}")
-                        continue
+                    colored_shapes.append(colored_shape)
+                
+                # Place all shapes at once
+                try:
+                    canvas, positions = place_shapes(
+                        colored_shapes,
+                        canvas_size=self.canvas_size,
+                        img_size=self.size
+                    )
+                except ValueError:
+                    print(f"Warning: Failed to place objects in trial {trial}")
+                    continue
                 
                 # Save image and metadata
                 filename = f'objects={n_objects}_trial={trial}.png'

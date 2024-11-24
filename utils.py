@@ -15,6 +15,36 @@ def instantiate_modules(module_cfgs: DictConfig) -> List:
     return modules
 
 
+def place_shapes(shape_imgs: List[np.ndarray],
+                canvas_size: Tuple[int, int] = (256, 256),
+                img_size: int = 40) -> Tuple[Image.Image, np.ndarray]:
+    """
+    Place multiple shapes on a canvas at non-overlapping positions.
+    
+    Args:
+        shape_imgs: List of shape images to place
+        canvas_size: Size of the canvas (height, width)
+        img_size: Size of each shape image
+        
+    Returns:
+        Tuple of (canvas image, array of positions)
+    """
+    # Create blank canvas
+    canvas = np.ones((3, canvas_size[0], canvas_size[1]), dtype=np.uint8) * 255
+    canvas = np.transpose(canvas, (1, 2, 0))  # Transpose to (HxWx3) for PIL
+    canvas_img = Image.fromarray(canvas)
+    
+    # Initialize positions array
+    n_shapes = len(shape_imgs)
+    positions = np.zeros([n_shapes, 2])
+    sizes = np.full(n_shapes, img_size)
+    
+    # Place each shape
+    for i, img in enumerate(shape_imgs):
+        positions = paste_shape(img, positions, sizes, canvas_img, i, img_size=img_size)
+        
+    return canvas_img, positions
+
 def paste_shape(shape: np.ndarray,
                positions: np.ndarray, 
                sizes: np.ndarray,
