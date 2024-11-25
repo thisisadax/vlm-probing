@@ -68,10 +68,26 @@ class LightningPooledProbe(pl.LightningModule):
         logits, _ = self.forward(xs)
         loss = F.cross_entropy(logits, ys)
         
-        # Log metrics
-        self.log(f'{mode}_loss', loss)
+        # Log metrics with more explicit parameters
         accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
-        self.log(f'{mode}_acc', accuracy)
+        self.log(
+            f'{mode}_loss', 
+            loss,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True
+        )
+        self.log(
+            f'{mode}_acc',
+            accuracy,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+            sync_dist=True
+        )
         
         return loss
 
