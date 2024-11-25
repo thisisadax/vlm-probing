@@ -20,7 +20,7 @@ class Probe(torch.nn.Module):
     def forward(self, x):
         xs, attention = self.pooler(x, return_att_vectors=True)
         ys = self.probe(xs)
-        ys = F.sofmax(ys, dim=-1)
+        ys = F.softmax(ys, dim=-1)
         return ys, attention
 
 
