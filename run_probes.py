@@ -66,10 +66,9 @@ def run(cfg: DictConfig) -> None:
     trainer.test(dataloaders=test_loader)
     
     # Cleanup
-    if loggers:
-        for logger in loggers:
-            if hasattr(logger, 'experiment'):
-                logger.experiment.finish()
+    if logger and not isinstance(logger, bool):
+        if hasattr(logger, 'experiment'):
+            logger.experiment.finish()
 
 if __name__ == '__main__':
     warnings.filterwarnings('ignore')
