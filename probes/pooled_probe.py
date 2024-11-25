@@ -110,13 +110,15 @@ class LightningPooledProbe(pl.LightningModule):
         accuracy = (predictions == targets).float().mean()
         self.log('val_acc', accuracy)
         
-        # Calculate per-class accuracies
-        for class_idx in range(ys.shape[1]):
-            # Get indices where this class is the target
-            class_mask = targets == class_idx
-            if class_mask.sum() > 0:  # Only calculate if we have examples of this class
-                class_acc = (predictions[class_mask] == targets[class_mask]).float().mean()
-                self.log(f'val_acc_class_{class_idx}', class_acc, on_epoch=True)
+        # Calculate per-class accuracies using list comprehension
+        class_accs = {
+            f'Class {i}': (predictions[targets == i] == targets[targets == i]).float().mean()
+            for i in range(ys.shape[1])
+            if (targets == i).sum() > 0
+        }
+        
+        # Log all class accuracies to a single plot
+        self.logger.experiment.add_scalars('val_acc_per_class', class_accs, self.global_step)
         
         if self.hparams.visualize_attention:
             self.attention_patterns.append(attention)
