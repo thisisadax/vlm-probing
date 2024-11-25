@@ -3,22 +3,14 @@ import warnings
 import hydra
 from omegaconf import DictConfig
 import pyrootutils
-import torch
-from typing import List, Tuple
+from typing import Tuple
 import pytorch_lightning as pl
 
-warnings.filterwarnings('ignore')
+from utils import instantiate_modules
 
-def instantiate_modules(module_cfgs: DictConfig) -> List:
-    """Instantiate all modules with _target_ defined in config."""
-    modules = []
-    for _, module in module_cfgs.items():
-        if '_target_' in module:
-            modules.append(hydra.utils.instantiate(module))
-    return modules
 
 def setup(cfg: DictConfig) -> Tuple:
-    """Setup training components."""
+    '''Setup training components.'''
     # Set seeds
     pl.seed_everything(cfg.seed)
     
@@ -32,9 +24,9 @@ def setup(cfg: DictConfig) -> Tuple:
     
     # Initialize model with dimensions from dataset
     model = hydra.utils.instantiate(
-        cfg.model,
+        cfg.probe,
         input_dim=input_dim,
-        hidden_dim=input_dim//2,  # Using half of input_dim as hidden_dim
+        hidden_dim=input_dim,  # Hidden dim for pooled probe is same as input
         output_dim=output_dim
     )
     
@@ -45,7 +37,7 @@ root = pyrootutils.setup_root(__file__, dotenv=True, pythonpath=True)
 
 @hydra.main(version_base=None, config_path='config', config_name='probing')
 def run(cfg: DictConfig) -> None:
-    """Main training routine."""
+    '''Main training routine.'''
     # Setup components
     model, train_loader, test_loader, val_loader = setup(cfg)
     
@@ -77,4 +69,5 @@ def run(cfg: DictConfig) -> None:
                 logger.experiment.finish()
 
 if __name__ == '__main__':
+    warnings.filterwarnings('ignore')
     run()
