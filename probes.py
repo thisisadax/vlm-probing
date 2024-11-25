@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 import os
 import json
 import datetime
-from pathlib import Path
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
@@ -122,10 +121,10 @@ class LightningProbe(pl.LightningModule):
         plt.tight_layout()
         
         # Save plot to file
-        output_dir = Path(f"output/{self.hparams.task_name}/{self.hparams.model_name}/attention_patterns")
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = os.path.join("output", self.hparams.task_name, self.hparams.model_name, "attention_patterns")
+        os.makedirs(output_dir, exist_ok=True)
         
-        output_path = output_dir / f"epoch-{self.current_epoch}.png"
+        output_path = os.path.join(output_dir, f"epoch-{self.current_epoch}.png")
         plt.savefig(output_path)
         plt.close()
         return None
@@ -135,13 +134,13 @@ class LightningProbe(pl.LightningModule):
         
     def save_run_results(self):
         """Save model results and attention patterns"""
-        base_path = Path(f"output/{self.hparams.task_name}/{self.hparams.model_name}")
-        results_path = base_path / "results"
-        attention_path = base_path / "attention_patterns"
+        base_path = os.path.join("output", self.hparams.task_name, self.hparams.model_name)
+        results_path = os.path.join(base_path, "results")
+        attention_path = os.path.join(base_path, "attention_patterns")
         
         # Create directories
-        results_path.mkdir(parents=True, exist_ok=True)
-        attention_path.mkdir(parents=True, exist_ok=True)
+        os.makedirs(results_path, exist_ok=True)
+        os.makedirs(attention_path, exist_ok=True)
         
         # Save metrics
         metrics = {
@@ -156,13 +155,13 @@ class LightningProbe(pl.LightningModule):
         }
         
         # Save metrics as JSON
-        metrics_file = results_path / "metrics.json"
+        metrics_file = os.path.join(results_path, "metrics.json")
         with open(metrics_file, 'w') as f:
             json.dump(metrics, f, indent=2)
             
         # Save attention patterns if available
         if self.attention_patterns:
-            attention_file = attention_path / "attention_patterns.npy"
+            attention_file = os.path.join(attention_path, "attention_patterns.npy")
             patterns = torch.cat(self.attention_patterns).cpu().numpy()
             np.save(attention_file, patterns)
             
