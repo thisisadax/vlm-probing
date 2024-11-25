@@ -20,6 +20,7 @@ class Probe(torch.nn.Module):
     def forward(self, x):
         xs, attention = self.pooler(x, return_att_vectors=True)
         ys = self.probe(xs)
+        ys = F.sofmax(ys, dim=-1)
         return ys, attention
 
 
@@ -40,8 +41,8 @@ class LightningPooledProbe(pl.LightningModule):
         self.save_hyperparameters()
         
         # Create the network
-        pooler = AttentionPooler(input_dim, hidden_dim)
-        probe_mlp = SimpleMLP(hidden_dim, hidden_dim, output_dim)
+        pooler = AttentionPooler(input_dim, input_dim)
+        probe_mlp = SimpleMLP(input_dim, input_dim, output_dim)
         self.net = Probe(pooler, probe_mlp)
 
         # Used to store attention patterns for visualization.
@@ -73,20 +74,14 @@ class LightningPooledProbe(pl.LightningModule):
         self.log(
             f'{mode}_loss', 
             loss,
-            on_step=True,
             on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            sync_dist=True
+            logger=True
         )
         self.log(
             f'{mode}_acc',
             accuracy,
-            on_step=True,
             on_epoch=True,
-            prog_bar=True,
-            logger=True,
-            sync_dist=True
+            logger=True
         )
         
         return loss
@@ -114,6 +109,7 @@ class LightningPooledProbe(pl.LightningModule):
         # Collect attention patterns from first 25 samples
         attention_patterns = torch.cat(self.attention_patterns)[:25]
         attention_patterns = attention_patterns[:, 1:-1] # Remove first and last token attention
+        self.attention_patterns = [] # Clear for next epoch
         
         # Check if remaining sequence length is square
         seq_len = attention_patterns.shape[1]
@@ -146,31 +142,10 @@ class LightningPooledProbe(pl.LightningModule):
     def save_run_results(self):
         '''Save model results and attention patterns'''
         base_path = os.path.join('output', self.hparams.task_name, self.hparams.model_name)
-        results_path = os.path.join(base_path, 'results')
         attention_path = os.path.join(base_path, 'attention_patterns')
         
-        # Create directories
-        os.makedirs(results_path, exist_ok=True)
-        os.makedirs(attention_path, exist_ok=True)
-        
-        # Save metrics
-        metrics = {
-            'final_train_acc': self.trainer.callback_metrics.get('train_acc').item(),
-            'final_val_acc': self.trainer.callback_metrics.get('val_acc').item(),
-            'final_test_acc': self.trainer.callback_metrics.get('test_acc', 0.0),
-            'final_train_loss': self.trainer.callback_metrics.get('train_loss').item(),
-            'final_val_loss': self.trainer.callback_metrics.get('val_loss').item(),
-            'final_test_loss': self.trainer.callback_metrics.get('test_loss', 0.0),
-            'epochs': self.current_epoch,
-            'timestamp': datetime.datetime.now().isoformat()
-        }
-        
-        # Save metrics as JSON
-        metrics_file = os.path.join(results_path, 'metrics.json')
-        with open(metrics_file, 'w') as f:
-            json.dump(metrics, f, indent=2)
-            
         # Save attention patterns if available
+        os.makedirs(attention_path, exist_ok=True)
         if self.attention_patterns:
             attention_file = os.path.join(attention_path, 'attention_patterns.npy')
             patterns = torch.cat(self.attention_patterns).cpu().numpy()

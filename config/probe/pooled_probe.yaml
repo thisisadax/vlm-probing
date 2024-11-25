@@ -1,0 +1,8 @@
+defaults:
+  - default
+_target_: probes.pooled_probe.LightningPooledProbe
+
+# Training hyperparameters
+visualize_attention: True
+
+# NOTE: input_dim, hidden_dim, and output_dim are now determined automatically from the dataset. May want to change this later if we use different probe architectures.
