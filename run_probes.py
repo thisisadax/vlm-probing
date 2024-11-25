@@ -43,13 +43,16 @@ def run(cfg: DictConfig) -> None:
     
     # Initialize callbacks and logger
     callbacks = instantiate_modules(cfg.get('callbacks'))
-    loggers = instantiate_modules(cfg.get('logger'))
+    logger = instantiate_modules(cfg.get('logger'))
     
+    if not logger:
+        logger = True  # Enable default logger if none specified
+        
     # Initialize trainer
     trainer = hydra.utils.instantiate(
         cfg.trainer,
         callbacks=callbacks,
-        logger=loggers
+        logger=logger
     )
     
     # Train model
