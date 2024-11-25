@@ -100,11 +100,16 @@ class LightningProbe(pl.LightningModule):
             return
             
         # Collect attention patterns from first 25 samples
+        print('n_attentions', len(self.attention_patterns))
+        print('1 att shape: ', self.attention_patterns[0].shape)
         attention_patterns = torch.cat(self.attention_patterns)[:25]
+        print('pattern shape', attention_patterns.shape)
         attention_patterns = attention_patterns[:, 1:-1] # Remove first and last token attention
         
         # Check if remaining sequence length is square
         seq_len = attention_patterns.shape[1]
+        print(attention_patterns.shape)
+        error
         side_len = int(np.sqrt(seq_len))
         if side_len * side_len != seq_len:
             print(f'Warning: Sequence length {seq_len} is not a perfect square')
@@ -117,7 +122,6 @@ class LightningProbe(pl.LightningModule):
             att_map = attention.reshape(side_len, side_len).cpu().numpy()
             im = ax.imshow(att_map, cmap='viridis')
             ax.axis('off')
-            
         plt.tight_layout()
         
         # Save plot to file
