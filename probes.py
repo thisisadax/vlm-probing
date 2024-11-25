@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import os
+import json
+import datetime
 from pathlib import Path
 import torch
 import torch.nn.functional as F
@@ -100,16 +102,11 @@ class LightningProbe(pl.LightningModule):
             return
             
         # Collect attention patterns from first 25 samples
-        print('n_attentions', len(self.attention_patterns))
-        print('1 att shape: ', self.attention_patterns[0].shape)
         attention_patterns = torch.cat(self.attention_patterns)[:25]
-        print('pattern shape', attention_patterns.shape)
         attention_patterns = attention_patterns[:, 1:-1] # Remove first and last token attention
         
         # Check if remaining sequence length is square
         seq_len = attention_patterns.shape[1]
-        print(attention_patterns.shape)
-        error
         side_len = int(np.sqrt(seq_len))
         if side_len * side_len != seq_len:
             print(f'Warning: Sequence length {seq_len} is not a perfect square')
@@ -135,6 +132,43 @@ class LightningProbe(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         return self.loss(batch, mode='test')
+        
+    def save_run_results(self):
+        """Save model results and attention patterns"""
+        base_path = Path(f"output/{self.hparams.task_name}/{self.hparams.model_name}")
+        results_path = base_path / "results"
+        attention_path = base_path / "attention_patterns"
+        
+        # Create directories
+        results_path.mkdir(parents=True, exist_ok=True)
+        attention_path.mkdir(parents=True, exist_ok=True)
+        
+        # Save metrics
+        metrics = {
+            "final_train_acc": self.trainer.callback_metrics.get("train_acc").item(),
+            "final_val_acc": self.trainer.callback_metrics.get("val_acc").item(),
+            "final_test_acc": self.trainer.callback_metrics.get("test_acc", 0.0),
+            "final_train_loss": self.trainer.callback_metrics.get("train_loss").item(),
+            "final_val_loss": self.trainer.callback_metrics.get("val_loss").item(),
+            "final_test_loss": self.trainer.callback_metrics.get("test_loss", 0.0),
+            "epochs": self.current_epoch,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        
+        # Save metrics as JSON
+        metrics_file = results_path / "metrics.json"
+        with open(metrics_file, 'w') as f:
+            json.dump(metrics, f, indent=2)
+            
+        # Save attention patterns if available
+        if self.attention_patterns:
+            attention_file = attention_path / "attention_patterns.npy"
+            patterns = torch.cat(self.attention_patterns).cpu().numpy()
+            np.save(attention_file, patterns)
+            
+    def on_fit_end(self):
+        """Called at the end of training"""
+        self.save_run_results()
 
 
 class AttentionPooler(Module):
