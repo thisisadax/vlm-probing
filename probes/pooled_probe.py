@@ -7,8 +7,8 @@ import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 import numpy as np
 from torch import optim
-from probes.attention_pooler import AttentionPooler
-from probes.mlp import SimpleMLP
+
+from probes.probe_utils import AttentionPooler, SimpleMLP
 
 
 class Probe(torch.nn.Module):
@@ -23,7 +23,7 @@ class Probe(torch.nn.Module):
         return ys, attention
 
 
-class LightningProbe(pl.LightningModule):
+class LightningPooledProbe(pl.LightningModule):
     def __init__(
         self,
         input_dim: int,
@@ -108,18 +108,18 @@ class LightningProbe(pl.LightningModule):
             
         # Create 5x5 grid of attention patterns
         fig, axes = plt.subplots(5, 5, figsize=(15, 15))
-        for idx, (attention, ax) in enumerate(zip(attention_patterns, axes.flat)):
+        for attention, ax in zip(attention_patterns, axes.flat):
             # Reshape to square
             att_map = attention.reshape(side_len, side_len).cpu().numpy()
-            im = ax.imshow(att_map, cmap='viridis')
+            _ = ax.imshow(att_map, cmap='viridis')
             ax.axis('off')
         plt.tight_layout()
         
         # Save plot to file
-        output_dir = os.path.join("output", self.hparams.task_name, self.hparams.model_name, "attention_patterns")
+        output_dir = os.path.join('output', self.hparams.task_name, self.hparams.model_name, 'attention_patterns')
         os.makedirs(output_dir, exist_ok=True)
         
-        output_path = os.path.join(output_dir, f"epoch-{self.current_epoch}.png")
+        output_path = os.path.join(output_dir, f'epoch-{self.current_epoch}.png')
         plt.savefig(output_path)
         plt.close()
         return None
@@ -128,10 +128,10 @@ class LightningProbe(pl.LightningModule):
         return self.loss(batch, mode='test')
         
     def save_run_results(self):
-        """Save model results and attention patterns"""
-        base_path = os.path.join("output", self.hparams.task_name, self.hparams.model_name)
-        results_path = os.path.join(base_path, "results")
-        attention_path = os.path.join(base_path, "attention_patterns")
+        '''Save model results and attention patterns'''
+        base_path = os.path.join('output', self.hparams.task_name, self.hparams.model_name)
+        results_path = os.path.join(base_path, 'results')
+        attention_path = os.path.join(base_path, 'attention_patterns')
         
         # Create directories
         os.makedirs(results_path, exist_ok=True)
@@ -139,27 +139,27 @@ class LightningProbe(pl.LightningModule):
         
         # Save metrics
         metrics = {
-            "final_train_acc": self.trainer.callback_metrics.get("train_acc").item(),
-            "final_val_acc": self.trainer.callback_metrics.get("val_acc").item(),
-            "final_test_acc": self.trainer.callback_metrics.get("test_acc", 0.0),
-            "final_train_loss": self.trainer.callback_metrics.get("train_loss").item(),
-            "final_val_loss": self.trainer.callback_metrics.get("val_loss").item(),
-            "final_test_loss": self.trainer.callback_metrics.get("test_loss", 0.0),
-            "epochs": self.current_epoch,
-            "timestamp": datetime.datetime.now().isoformat()
+            'final_train_acc': self.trainer.callback_metrics.get('train_acc').item(),
+            'final_val_acc': self.trainer.callback_metrics.get('val_acc').item(),
+            'final_test_acc': self.trainer.callback_metrics.get('test_acc', 0.0),
+            'final_train_loss': self.trainer.callback_metrics.get('train_loss').item(),
+            'final_val_loss': self.trainer.callback_metrics.get('val_loss').item(),
+            'final_test_loss': self.trainer.callback_metrics.get('test_loss', 0.0),
+            'epochs': self.current_epoch,
+            'timestamp': datetime.datetime.now().isoformat()
         }
         
         # Save metrics as JSON
-        metrics_file = os.path.join(results_path, "metrics.json")
+        metrics_file = os.path.join(results_path, 'metrics.json')
         with open(metrics_file, 'w') as f:
             json.dump(metrics, f, indent=2)
             
         # Save attention patterns if available
         if self.attention_patterns:
-            attention_file = os.path.join(attention_path, "attention_patterns.npy")
+            attention_file = os.path.join(attention_path, 'attention_patterns.npy')
             patterns = torch.cat(self.attention_patterns).cpu().numpy()
             np.save(attention_file, patterns)
             
     def on_fit_end(self):
-        """Called at the end of training"""
+        '''Called at the end of training'''
         self.save_run_results()
