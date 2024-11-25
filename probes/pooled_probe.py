@@ -35,7 +35,8 @@ class LightningPooledProbe(pl.LightningModule):
         lr: float = 5e-4,
         weight_decay: float = 1e-6,
         max_epochs: int = 20,
-        visualize_attention: bool = False
+        visualize_attention: bool = False,
+        sparsity_lambda: float = 0.01
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -66,8 +67,16 @@ class LightningPooledProbe(pl.LightningModule):
 
     def loss(self, batch, mode='train'):
         xs, ys = batch
-        logits, _ = self.forward(xs)
-        loss = F.cross_entropy(logits, ys)
+        logits, attention = self.forward(xs)
+        
+        # Main classification loss
+        class_loss = F.cross_entropy(logits, ys)
+        
+        # L1 sparsity constraint on attention weights
+        sparsity_loss = attention.abs().mean()
+        
+        # Combined loss
+        loss = class_loss + self.hparams.sparsity_lambda * sparsity_loss
         
         # Log metrics with more explicit parameters
         accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
