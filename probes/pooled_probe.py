@@ -15,14 +15,10 @@ class Probe(torch.nn.Module):
         self.pooler = pooler
         self.probe = probe_mlp
         
-    def forward(self, x, return_attention=False):
-        if return_attention:
-            xs, attention = self.pooler(x, return_att_vectors=True)
-            ys = self.probe(xs)
-            return ys, attention
-        xs = self.pooler(x)
+    def forward(self, x):
+        xs, attention = self.pooler(x, return_att_vectors=True)
         ys = self.probe(xs)
-        return ys
+        return ys, attention
 
 
 class LightningProbe(pl.LightningModule):
@@ -62,15 +58,12 @@ class LightningProbe(pl.LightningModule):
         )
         return [optimizer], [lr_scheduler]
     
-    def forward(self, xs, visualize_attention=False):
-        if visualize_attention:
-            out, attention = self.net(xs, return_attention=True)
-            return out, attention
+    def forward(self, xs):
         return self.net(xs)
 
     def loss(self, batch, mode='train'):
         xs, ys = batch
-        logits = self.forward(xs)
+        logits, _ = self.forward(xs)
         loss = F.cross_entropy(logits, ys)
         
         # Log metrics
@@ -84,15 +77,17 @@ class LightningProbe(pl.LightningModule):
         return self.loss(batch, mode='train')
 
     def validation_step(self, batch, batch_idx):
+        xs, ys = batch
+        logits, attention = self.forward(xs)
+        loss = F.cross_entropy(logits, ys)
+        self.log('val_loss', loss)
+        accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
+        self.log('val_acc', accuracy)
+        
         if self.hparams.visualize_attention:
-            xs, ys = batch
-            logits, attention = self.forward(xs, visualize_attention=True)
-            loss = F.cross_entropy(logits, ys)
-            self.log('val_loss', loss)
-            accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
-            self.log('val_acc', accuracy)
             self.attention_patterns.append(attention)
-        return self.loss(batch, mode='val')
+            
+        return loss
 
     def on_validation_epoch_end(self):
         if not self.hparams.visualize_attention:
