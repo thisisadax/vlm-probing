@@ -103,8 +103,20 @@ class LightningPooledProbe(pl.LightningModule):
         logits, attention = self.forward(xs)
         loss = F.cross_entropy(logits, ys)
         self.log('val_loss', loss)
-        accuracy = (logits.argmax(dim=1) == ys.argmax(dim=1)).float().mean()
+        
+        # Calculate overall accuracy
+        predictions = logits.argmax(dim=1)
+        targets = ys.argmax(dim=1)
+        accuracy = (predictions == targets).float().mean()
         self.log('val_acc', accuracy)
+        
+        # Calculate per-class accuracies
+        for class_idx in range(ys.shape[1]):
+            # Get indices where this class is the target
+            class_mask = targets == class_idx
+            if class_mask.sum() > 0:  # Only calculate if we have examples of this class
+                class_acc = (predictions[class_mask] == targets[class_mask]).float().mean()
+                self.log(f'val_acc_class_{class_idx}', class_acc, on_epoch=True)
         
         if self.hparams.visualize_attention:
             self.attention_patterns.append(attention)
