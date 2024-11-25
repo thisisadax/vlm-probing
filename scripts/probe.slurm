@@ -3,7 +3,7 @@
 #SBATCH --nodes=1                          # node count
 #SBATCH --ntasks=1                         # total number of tasks across all nodes
 #SBATCH --gres=gpu:1                       # number of gpus per node
-#SBATCH --constraint=gpu80                 # gpu model   
+#SBATCH --constraint=gpu                   # require any gpu
 #SBATCH --time=00:20:00                    # total run time limit (HH:MM:SS)
 #SBATCH --mem-per-cpu=32G                  # memory per cpu-core (4G is default)
 #SBATCH --output slurm/probe.out           # location to save output
