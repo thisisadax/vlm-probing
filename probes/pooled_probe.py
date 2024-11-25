@@ -7,6 +7,8 @@ import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 import numpy as np
 from torch import optim
+from probes.attention_pooler import AttentionPooler
+from probes.mlp import SimpleMLP
 
 
 class Probe(torch.nn.Module):
