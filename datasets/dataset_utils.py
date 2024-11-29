@@ -88,16 +88,14 @@ class ProbeDatasets(ABC):
     def _load_features(self, files: List[str]) -> Tuple[torch.Tensor, torch.Tensor]:
         '''Load and concatenate feature files.'''
         features = torch.cat([torch.load(file) for file in files], dim=0).float()
-        masks = None
-
-        # Select only the image token features for each sample
+        
+        # Load image mask
+        mask_path = f'output/{self.task_name}/{self.model_name}/image_mask.pt'
+        if not os.path.exists(mask_path):
+            raise FileNotFoundError(f'Image mask file not found: {mask_path}')
+        self.image_mask = torch.load(mask_path, weights_only=True)
+        
         if self.exclude_text:
-            mask_path = f'output/{self.task_name}/{self.model_name}/image_mask.pt'
-            if not os.path.exists(mask_path):
-                raise FileNotFoundError(f'Image mask file not found: {mask_path}')
-            self.image_mask = torch.load(mask_path, weights_only=True)
-            masks = self.image_mask
-            
             # Apply mask for each sample individually
             masked_features = []
             for i, sample in enumerate(features):
@@ -106,6 +104,11 @@ class ProbeDatasets(ABC):
             
             # Stack the masked features
             features = torch.stack(masked_features)
+            # Create new mask of all 1s matching masked features shape
+            masks = torch.ones((len(features), features.shape[1]), dtype=torch.bool)
+        else:
+            masks = self.image_mask
+            
         return features, masks
     
     def _create_split_indices(self, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
