@@ -93,8 +93,15 @@ class ProbeDatasets(ABC):
             if not os.path.exists(mask_path):
                 raise FileNotFoundError(f'Image mask file not found: {mask_path}')
             self.image_mask = torch.load(mask_path, weights_only=True)
-            image_indices = torch.where(self.image_mask[0] == 1)[0]  # TODO: change this to be more general (currently only using first mask)
-            features = features[:, image_indices.to(features.device)]
+            
+            # Apply mask for each sample individually
+            masked_features = []
+            for i, sample in enumerate(features):
+                image_indices = torch.where(self.image_mask[i] == 1)[0]
+                masked_features.append(sample[image_indices])
+            
+            # Stack the masked features
+            features = torch.stack(masked_features)
         return features
     
     def _create_split_indices(self, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
