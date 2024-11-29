@@ -10,10 +10,11 @@ from abc import ABC, abstractmethod
 
 class TensorDataset(Dataset):
     '''Dataset wrapper for tensor features and labels with metadata.'''
-    def __init__(self, features: torch.Tensor, labels: torch.Tensor, df: pd.DataFrame = None):
+    def __init__(self, features: torch.Tensor, labels: torch.Tensor, df: pd.DataFrame = None, masks: torch.Tensor = None):
         self.features = features
         self.labels = labels
         self.df = df
+        self.masks = masks
         
         if len(self.features) != len(self.labels):
             raise ValueError(
@@ -27,8 +28,9 @@ class TensorDataset(Dataset):
     def __len__(self) -> int:
         return len(self.features)
     
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
-        return self.features[idx], self.labels[idx], self.df.iloc[idx].to_dict()
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, dict, torch.Tensor]:
+        mask = self.masks[idx] if self.masks is not None else None
+        return self.features[idx], self.labels[idx], self.df.iloc[idx].to_dict(), mask
     
     @property
     def metadata(self) -> dict:
@@ -83,9 +85,10 @@ class ProbeDatasets(ABC):
         '''Encode target values into labels.'''
         pass
     
-    def _load_features(self, files: List[str]) -> torch.Tensor:
+    def _load_features(self, files: List[str]) -> Tuple[torch.Tensor, torch.Tensor]:
         '''Load and concatenate feature files.'''
         features = torch.cat([torch.load(file) for file in files], dim=0).float()
+        masks = None
 
         # Select only the image token features for each sample
         if self.exclude_text:
@@ -93,6 +96,7 @@ class ProbeDatasets(ABC):
             if not os.path.exists(mask_path):
                 raise FileNotFoundError(f'Image mask file not found: {mask_path}')
             self.image_mask = torch.load(mask_path, weights_only=True)
+            masks = self.image_mask
             
             # Apply mask for each sample individually
             masked_features = []
@@ -102,7 +106,7 @@ class ProbeDatasets(ABC):
             
             # Stack the masked features
             features = torch.stack(masked_features)
-        return features
+        return features, masks
     
     def _create_split_indices(self, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
@@ -134,8 +138,8 @@ class ProbeDatasets(ABC):
         if not pt_files:
             raise FileNotFoundError(f'No .pt files found matching pattern: {pattern}')
         
-        # Load features and encode labels
-        features = self._load_features(pt_files)
+        # Load features, masks and encode labels
+        features, masks = self._load_features(pt_files)
         labels = self._encoder_fn(df[self.target_column])
         
         if not isinstance(labels, torch.Tensor):
@@ -146,18 +150,21 @@ class ProbeDatasets(ABC):
         
         # Create dataloaders
         train_loader = DataLoader(
-            TensorDataset(features[train_idx], labels[train_idx], df=df.iloc[train_idx]),
+            TensorDataset(features[train_idx], labels[train_idx], df=df.iloc[train_idx], 
+                         masks=masks[train_idx] if masks is not None else None),
             batch_size=self.batch_size,
             shuffle=True
         )
         
         test_loader = DataLoader(
-            TensorDataset(features[test_idx], labels[test_idx], df=df.iloc[test_idx]),
+            TensorDataset(features[test_idx], labels[test_idx], df=df.iloc[test_idx],
+                         masks=masks[test_idx] if masks is not None else None),
             batch_size=self.batch_size
         )
         
         val_loader = DataLoader(
-            TensorDataset(features[val_idx], labels[val_idx], df=df.iloc[val_idx]),
+            TensorDataset(features[val_idx], labels[val_idx], df=df.iloc[val_idx],
+                         masks=masks[val_idx] if masks is not None else None),
             batch_size=self.batch_size
         )
         return train_loader, test_loader, val_loader
