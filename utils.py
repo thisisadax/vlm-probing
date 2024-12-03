@@ -27,11 +27,14 @@ def collect_outputs(outputs, keys=['predictions', 'targets', 'attention', 'masks
     for batch in outputs:                                                                                             
         batch_metadata = batch['metadata']                                                                            
         if isinstance(batch_metadata, dict):                                                                          
-            metadata_dicts.append(pd.DataFrame([batch_metadata]))                                                     
+            # Single metadata dict - expand to match batch size
+            batch_size = len(batch['predictions'])
+            metadata_dicts.extend([batch_metadata] * batch_size)                                                     
         else:                                                                                                         
-            metadata_dicts.append(pd.DataFrame(batch_metadata))                                                       
+            # List of metadata dicts
+            metadata_dicts.extend(batch_metadata)                                                       
                                                                                                                     
-    metadata = pd.concat(metadata_dicts, ignore_index=True)                                                           
+    metadata = pd.DataFrame(metadata_dicts)                                                           
                                                                                                                     
     # Verify alignment                                                                                                
     expected_length = len(tensors[keys[0]])                                                                           
