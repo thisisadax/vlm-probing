@@ -92,6 +92,22 @@ class TensorProductProbe(pl.LightningModule):
         # Collect the results from the validation loop.
         outputs = collect_outputs(self.outputs)
         
+        # Debug prints to check alignment
+        print("\nValidation Epoch End Alignment Check:")
+        print(f"Number of batches in self.outputs: {len(self.outputs)}")
+        print(f"Predictions shape: {outputs['predictions'].shape}")
+        print(f"Targets shape: {outputs['targets'].shape}")
+        print(f"Attention shape: {outputs['attention'].shape}")
+        print(f"Metadata length: {len(outputs['metadata'])}")
+        print(f"Masks shape: {outputs['masks'].shape}")
+        
+        # Add assertions to catch misalignment
+        n_samples = len(outputs['predictions'])
+        assert len(outputs['metadata']) == n_samples, f"Metadata length ({len(outputs['metadata'])}) != predictions length ({n_samples})"
+        assert len(outputs['targets']) == n_samples, f"Targets length ({len(outputs['targets'])}) != predictions length ({n_samples})"
+        assert len(outputs['attention']) == n_samples, f"Attention length ({len(outputs['attention'])}) != predictions length ({n_samples})"
+        assert len(outputs['masks']) == n_samples, f"Masks length ({len(outputs['masks'])}) != predictions length ({n_samples})"
+        
         # Visualize attention maps and 2D feature conjunctions.
         if self.hparams.visualize_attention:
             self.visualize_attention_patterns(outputs)
