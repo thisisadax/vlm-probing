@@ -3,6 +3,70 @@ from PIL import Image
 from typing import List, Tuple
 import hydra
 from omegaconf import DictConfig
+import pandas as pd
+import torch
+
+def tensor_to_array(x):
+    return x.detach().cpu().numpy() if isinstance(x, torch.Tensor) else x
+
+def collect_outputs(outputs, keys=['predictions', 'targets', 'attention', 'masks']):                                  
+    '''                                                                                                               
+    Collects outputs from the lightning validation loop, concatenating tensors/floats and                             
+    converting the 'metadata' field to a DataFrame.                                                                   
+    '''                                                                                                               
+    if not outputs:                                                                                                   
+        return {}                                                                                                     
+                                                                                                                    
+    # First collect all tensors to get the correct total length                                                       
+    tensors = {}                                                                                                      
+    for key in keys:                                                                                                  
+        tensors[key] = torch.cat([x[key] for x in outputs]).squeeze().cpu()                                           
+                                                                                                                    
+    # Now process metadata to match tensor length                                                                     
+    metadata_dicts = []                                                                                               
+    for batch in outputs:                                                                                             
+        batch_metadata = batch['metadata']                                                                            
+        if isinstance(batch_metadata, dict):                                                                          
+            metadata_dicts.append(pd.DataFrame([batch_metadata]))                                                     
+        else:                                                                                                         
+            metadata_dicts.append(pd.DataFrame(batch_metadata))                                                       
+                                                                                                                    
+    metadata = pd.concat(metadata_dicts, ignore_index=True)                                                           
+                                                                                                                    
+    # Verify alignment                                                                                                
+    expected_length = len(tensors[keys[0]])                                                                           
+    if len(metadata) != expected_length:                                                                              
+        raise ValueError(f"Metadata length ({len(metadata)}) doesn't match tensor length ({expected_length})")        
+                                                                                                                    
+    return {**tensors, 'metadata': metadata}
+
+def collect_outputs_OLD(outputs, keys=['predictions', 'targets', 'attention', 'masks']):
+    '''
+    Collects outputs from the lightning validation loop, concatenating tensors/floats and 
+    converting the 'metadata' field to a DataFrame.
+    
+    Args:
+        outputs: List of dictionaries with tensors, floats, and a 'metadata' dict
+        keys: List of keys to collect from the 'metadata' dict
+        
+    Returns:
+        Dictionary with concatenated tensors and metadata DataFrame
+    '''
+    if not outputs:
+        return {}
+    
+    metadata = [{k: tensor_to_array(v) for k, v in batch['metadata'].items()} for batch in outputs]
+    metadata = pd.concat([pd.DataFrame(x) for x in metadata])
+    #print(metadata.shape)
+    #print(metadata)
+    
+    # Process each key
+    tensors = {}
+    for key in keys:
+        tensors[key] = torch.cat([x[key] for x in outputs]).squeeze().cpu()
+    
+    # Combine results
+    return {**tensors, 'metadata': metadata}
 
 
 def instantiate_modules(module_cfgs: DictConfig) -> List:
@@ -17,7 +81,7 @@ def instantiate_modules(module_cfgs: DictConfig) -> List:
 def place_shapes(shape_imgs: List[np.ndarray],
                 canvas_size: Tuple[int, int] = (256, 256),
                 img_size: int = 40) -> Tuple[Image.Image, np.ndarray]:
-    """
+    '''
     Place multiple shapes on a canvas at non-overlapping positions.
     
     Args:
@@ -27,7 +91,7 @@ def place_shapes(shape_imgs: List[np.ndarray],
         
     Returns:
         Tuple of (canvas image, array of positions)
-    """
+    '''
     # Create blank canvas
     canvas = np.ones((3, canvas_size[0], canvas_size[1]), dtype=np.uint8) * 255
     canvas = np.transpose(canvas, (1, 2, 0))  # Transpose to (HxWx3) for PIL
@@ -50,15 +114,18 @@ def paste_shape(shape: np.ndarray,
                canvas_img: Image.Image,
                i: int,
                img_size: int = 40,
-               max_attempts: int = 1000) -> np.ndarray:
+               max_attempts: int = 5000,
+               padding: int = 20) -> np.ndarray:
    '''
    Paste a shape onto a canvas image at a non-overlapping position.
    Raises ValueError if unable to find valid position after max_attempts tries.
    '''
    assert len(positions) == len(sizes), 'positions and sizes must have same length'
-   img = Image.fromarray(np.transpose(shape, (1, 2, 0)))
-   max_pos = 256 - img_size  # Adjust for shape size to keep within canvas bounds
-   position = np.random.randint(0, max_pos, size=2).reshape(1, -1)
+   img = Image.fromarray(np.transpose(shape.astype(np.uint8), (1, 2, 0)))
+   canvas_width, canvas_height = canvas_img.size
+   max_pos_x = canvas_width - img_size  # Adjust for shape size to keep within canvas bounds
+   max_pos_y = canvas_height - img_size  # Adjust for shape size to keep within canvas bounds
+   position = np.random.randint(0, [max_pos_x, max_pos_y], size=2).reshape(1, -1)
    
    attempts = 0
    while attempts < max_attempts:
@@ -67,12 +134,12 @@ def paste_shape(shape: np.ndarray,
            break
            
        # Calculate minimum distances needed to avoid overlap
-       min_distances = (sizes[:i] + img_size) / 2
+       min_distances = (sizes[:i] + img_size) / 2 + padding
        distances = np.linalg.norm(positions[:i] - position, axis=1)
        if np.all(distances >= min_distances):
            break
            
-       position = np.random.randint(0, max_pos, size=2).reshape(1, -1)
+       position = np.random.randint(0, [max_pos_x, max_pos_y], size=2).reshape(1, -1)
        attempts += 1
    
    if attempts == max_attempts:
