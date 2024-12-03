@@ -1,12 +1,13 @@
+import os
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import torch.optim as optim
 import pytorch_lightning as pl
 from typing import Tuple
-from torch.nn import functional as F
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 
 from probes.probe_utils import SimpleMLP, PooledAttentionProbe, TenneyMLP
 from utils import collect_outputs
