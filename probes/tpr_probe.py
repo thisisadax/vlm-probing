@@ -134,26 +134,37 @@ class TensorProductProbe(pl.LightningModule):
     def visualize_attention_patterns(self, outputs):
         # Choose a random index
         idx = np.random.choice(len(outputs['attention']))
-        mask = outputs['masks'][idx].cpu().numpy()
-        attention = outputs['attention'][idx].cpu().numpy()
+        
+        # Get number of feature conjunctions present in this example
+        targets = outputs['targets'][idx]
+        feature_indices = torch.where(targets.sum(dim=-1) > 0)[0]
+        n_features = len(feature_indices)
+        
+        if n_features == 0:
+            return
+            
+        # Get corresponding attention maps and image path
+        attention_maps = outputs['attention'][idx][feature_indices].cpu().numpy()
         image_path = outputs['metadata']['path'].values[idx]
-        fig = self._plot_masked_data(attention, mask, image_path)
+        
+        # Plot the attention maps
+        fig = self._plot_masked_data(attention_maps, image_path)
+        
+        # Save the figure
         os.makedirs(self.output_dir, exist_ok=True)
         output_path = os.path.join(self.output_dir, f'epoch-{self.current_epoch}.png')
         plt.savefig(output_path)
         plt.close()
 
-    def _plot_masked_data(self, data, mask, image_path):
+    def _plot_masked_data(self, attention_maps, image_path):
         '''
-        Create a figure with three subplots: a line plot with masked background,
-        a square image visualization of the masked data, and the input image.
+        Create a figure with attention maps for each feature present in the image
+        alongside the input image.
         
         Parameters:
         -----------
-        data : array-like
-            The input data to plot
-        mask : array-like
-            Binary mask of same length as data, where 1 indicates masked regions
+        attention_maps : array-like
+            Array of shape [N, T] containing N attention maps over T tokens
         image_path : str
             Path to the image file to display
             
@@ -162,55 +173,30 @@ class TensorProductProbe(pl.LightningModule):
         fig : matplotlib.figure.Figure
             The generated figure object
         '''
+        n_features = len(attention_maps)
         
-        # Validate inputs
-        if len(data) != len(mask):
-            raise ValueError('Data and mask must have the same length')
-            
-        # Extract masked data
-        masked_data = data[mask == 1]
-        if len(masked_data) == 0:
-            raise ValueError('No masked data found (mask contains all zeros)')
-        masked_data = masked_data[1:-1] # remove image delimeter tokens
-            
-        # Calculate optimal square dimensions
-        size = int(np.ceil(np.sqrt(len(masked_data))))
+        # Create figure with n_features + 1 subplots (including the input image)
+        fig, axes = plt.subplots(1, n_features + 1, figsize=(4*(n_features + 1), 4))
         
-        # Pre-generate figure and axes
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 4))
-        
-        # First subplot: Original plot with masked background
-        ymin, ymax = data.min(), data.min()
-        padding = (ymax - ymin) * 0.1
-        ymin -= padding
-        ymax += padding
-        x = np.arange(len(data))
-        ax1.fill_between(x, ymin, ymax,
-                        where=mask==1,
-                        color='red',
-                        alpha=0.25,
-                        label='Image Token Weights')
-        ax1.plot(data, label='Attention Mask', c='black')
-        ax1.grid(True, alpha=0.25)
-        ax1.legend()
-        ax1.set_title('Attention Weights', fontsize=14)
-        ax1.set_xlabel('Token Index', fontsize=13)
-        ax1.set_ylabel('Weight', fontsize=13)
-        ax1.set_ylim(ymin, ymax)
-        ax1.set_xlim(0, len(data))
-        
-        # Create heatmap of the square data
-        square_data = masked_data.reshape(size, size)
-        im = ax2.imshow(square_data, cmap='RdBu_r')
-        fig.colorbar(im, ax=ax2)
-        ax2.set_title(f'Image Token Attention Weights', fontsize=14)
-        ax2.axis('off')
-        
-        # Add image
+        # Plot input image in the first subplot
         img = Image.open(image_path)
-        ax3.imshow(img)
-        ax3.set_title('Input Image', fontsize=14)
-        ax3.axis('off')
+        axes[0].imshow(img)
+        axes[0].set_title('Input Image', fontsize=14)
+        axes[0].axis('off')
+        
+        # Plot attention maps
+        for i, attention in enumerate(attention_maps):
+            # Remove image delimiter tokens and reshape to square
+            attention = attention[1:-1]  # remove delimiter tokens
+            size = int(np.ceil(np.sqrt(len(attention))))
+            square_attention = attention.reshape(size, size)
+            
+            # Plot attention heatmap
+            im = axes[i+1].imshow(square_attention, cmap='RdBu_r')
+            fig.colorbar(im, ax=axes[i+1])
+            axes[i+1].set_title(f'Feature {i+1} Attention', fontsize=14)
+            axes[i+1].axis('off')
+        
         plt.tight_layout()
         return fig
 
