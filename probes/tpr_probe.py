@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
-from probes.probe_utils import SimpleMLP, PooledAttentionProbe, TenneyMLP
+from probes.probe_utils import SimpleMLP, PooledAttentionProbe
 from utils import collect_outputs
 
 
@@ -27,10 +27,10 @@ class TensorProductProbe(pl.LightningModule):
         
         pooler = MultiProbeAttentionPooler(input_dim, output_dim)
         probe_mlp = SimpleMLP(input_dim, input_dim, output_dim)
-        #probe_mlp = TenneyMLP(input_dim, hidden_dim, output_dim)
         self.net = PooledAttentionProbe(pooler, probe_mlp, softmax=False)
 
         # Track examples from the validation loop.
+        self.output_dir = os.path.join('output', task_name, model_name, probe_name, layer_name, 'attention_patterns')
         self.outputs = []
 
     def configure_optimizers(self):
@@ -76,7 +76,6 @@ class TensorProductProbe(pl.LightningModule):
         total_valid = valid_mask.sum()
         accuracy = 100.0 * correct.sum() / total_valid
 
-        
         self.log(f'{mode}_loss', loss, on_epoch=True)
         self.log(f'{mode}_acc', accuracy, on_epoch=True)
         
