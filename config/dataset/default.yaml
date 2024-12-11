@@ -1,0 +1,7 @@
+train_prop: 0.7
+test_prop: 0.15
+val_prop: 0.15
+batch_size: 256
+exclude_text: True # Whether to mask the token embeddings before training the probes.
+model_name: qwen
+layer_name: layer-27

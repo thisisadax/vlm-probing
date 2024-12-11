@@ -23,14 +23,14 @@ def setup(cfg: DictConfig) -> Tuple:
     output_dim = train_loader.dataset.label_dim
     
     # Initialize model with dimensions from dataset
-    model = hydra.utils.instantiate(
+    probe = hydra.utils.instantiate(
         cfg.probe,
         input_dim=input_dim,
         hidden_dim=input_dim,  # Hidden dim for pooled probe is same as input
         output_dim=output_dim
     )
     
-    return model, train_loader, test_loader, val_loader
+    return probe, train_loader, test_loader, val_loader
 
 # Project root setup
 root = pyrootutils.setup_root(__file__, dotenv=True, pythonpath=True)
