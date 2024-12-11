@@ -1,6 +1,8 @@
 import os
 import warnings
 import hydra
+import gc
+import torch
 from omegaconf import DictConfig
 import pyrootutils
 from typing import Tuple, List
@@ -88,6 +90,12 @@ def run(cfg: DictConfig) -> None:
         if logger and not isinstance(logger, bool):
             if hasattr(logger, 'experiment'):
                 logger.experiment.finish()
+        
+        # Clear memory
+        del model, train_loader, test_loader, val_loader
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
 if __name__ == '__main__':
     warnings.filterwarnings('ignore')
