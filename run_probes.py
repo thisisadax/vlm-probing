@@ -3,16 +3,28 @@ import warnings
 import hydra
 from omegaconf import DictConfig
 import pyrootutils
-from typing import Tuple
+from typing import Tuple, List
 import pytorch_lightning as pl
+from glob import glob
+from pathlib import Path
 
 from utils import instantiate_modules
 
 
-def setup(cfg: DictConfig) -> Tuple:
+def get_layer_names(cfg: DictConfig) -> List[str]:
+    '''Get all layer names from activation directory.'''
+    activation_path = f"output/{cfg.probe.task_name}/{cfg.probe.model_name}/activations/*"
+    layer_dirs = glob(activation_path)
+    return [Path(d).name for d in layer_dirs]
+
+def setup(cfg: DictConfig, layer_name: str = None) -> Tuple:
     '''Setup training components.'''
     # Set seeds
     pl.seed_everything(cfg.seed)
+    
+    # Update layer name in dataset config if provided
+    if layer_name is not None:
+        cfg.dataset.layer_name = layer_name
     
     # Load dataset first to determine dimensions
     dataset = hydra.utils.instantiate(cfg.dataset)
@@ -38,37 +50,44 @@ root = pyrootutils.setup_root(__file__, dotenv=True, pythonpath=True)
 @hydra.main(version_base=None, config_path='config', config_name='probing')
 def run(cfg: DictConfig) -> None:
     '''Main training routine.'''
-    # Setup components
-    model, train_loader, test_loader, val_loader = setup(cfg)
     
-    # Initialize callbacks and logger
-    callbacks = instantiate_modules(cfg.get('callbacks'))
-    logger = instantiate_modules(cfg.get('logger'))
+    # Determine which layers to process
+    layer_names = [cfg.dataset.layer_name] if cfg.dataset.layer_name else get_layer_names(cfg)
     
-    if not logger:
-        logger = True  # Enable default logger if none specified
+    for layer_name in layer_names:
+        print(f"\nProcessing layer: {layer_name}")
         
-    # Initialize trainer
-    trainer = hydra.utils.instantiate(
-        cfg.trainer,
-        callbacks=callbacks,
-        logger=logger
-    )
-    
-    # Train model
-    trainer.fit(
-        model=model,
-        train_dataloaders=train_loader,
-        val_dataloaders=val_loader
-    )
-    
-    # Test model
-    trainer.test(dataloaders=test_loader)
-    
-    # Cleanup
-    if logger and not isinstance(logger, bool):
-        if hasattr(logger, 'experiment'):
-            logger.experiment.finish()
+        # Setup components for this layer
+        model, train_loader, test_loader, val_loader = setup(cfg, layer_name)
+        
+        # Initialize callbacks and logger
+        callbacks = instantiate_modules(cfg.get('callbacks'))
+        logger = instantiate_modules(cfg.get('logger'))
+        
+        if not logger:
+            logger = True  # Enable default logger if none specified
+            
+        # Initialize trainer
+        trainer = hydra.utils.instantiate(
+            cfg.trainer,
+            callbacks=callbacks,
+            logger=logger
+        )
+        
+        # Train model
+        trainer.fit(
+            model=model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader
+        )
+        
+        # Test model
+        trainer.test(dataloaders=test_loader)
+        
+        # Cleanup
+        if logger and not isinstance(logger, bool):
+            if hasattr(logger, 'experiment'):
+                logger.experiment.finish()
 
 if __name__ == '__main__':
     warnings.filterwarnings('ignore')
