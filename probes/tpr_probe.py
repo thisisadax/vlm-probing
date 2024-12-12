@@ -57,6 +57,9 @@ class TensorProductProbe(pl.LightningModule):
         self.outputs.append(output)  # collect the validation epoch info
         return output
 
+    def test_step(self, batch, batch_idx):
+        return self.loss(batch, mode='test')
+
     def loss(self, batch, mode='train'):
         xs, ys, metadata, masks = batch
         logits, attention = self.forward(xs)
@@ -91,15 +94,6 @@ class TensorProductProbe(pl.LightningModule):
     def on_validation_epoch_end(self):
         # Collect the results from the validation loop.
         outputs = collect_outputs(self.outputs)
-        
-        # Debug prints to check alignment
-        print("\nValidation Epoch End Alignment Check:")
-        print(f"Number of batches in self.outputs: {len(self.outputs)}")
-        print(f"Predictions shape: {outputs['predictions'].shape}")
-        print(f"Targets shape: {outputs['targets'].shape}")
-        print(f"Attention shape: {outputs['attention'].shape}")
-        print(f"Metadata length: {len(outputs['metadata'])}")
-        print(f"Masks shape: {outputs['masks'].shape}")
         
         # Add assertions to catch misalignment
         n_samples = len(outputs['predictions'])
@@ -231,13 +225,6 @@ class MultiProbeAttentionPooler(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.n_probes = n_probes
-        #print(f'n_probes: {n_probes}')
-        
-        # Single linear projection to compute attention scores for all probes
-        # Maps from input_dim -> n_probes
-        self.attention_proj = nn.Sequential(nn.Linear(input_dim, input_dim//2),
-        									 nn.ReLU(),
-                                             nn.Linear(input_dim//2, n_probes))
         self.attention_proj = nn.Linear(input_dim, n_probes)
         
     def forward(self, x, return_att_vectors=True):
@@ -259,19 +246,14 @@ class MultiProbeAttentionPooler(nn.Module):
         # Input shape: [B, T, D]
         # Output shape: [B, T, P]
         attention_logits = self.attention_proj(x)
-        #print(f'attention_logits.shape: {attention_logits.shape}')
         
         # Apply softmax over token dimension (dim=1)
         # Input/Output shape: [B, T, P]
-        #attention = F.softmax(attention_logits / torch.sqrt(torch.tensor(self.input_dim)), dim=1)
         attention = F.softmax(attention_logits, dim=1)
-        #print(f'attention post softmax shape: {attention_logits.shape}')
         
         # Pool representations using attention weights
         # attention: [B, T, P]
         # x: [B, T, D]
         # Output: [B, P, D]
         pooled = torch.einsum('btp,btd->bpd', attention, x)
-        #print(f'pooled shape: {pooled.shape}')
-        #print('\n\n\n\n')
         return pooled, attention.transpose(1, 2)  # Return [B, P, T] for consistency

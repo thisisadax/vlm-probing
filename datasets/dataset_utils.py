@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 
 class TensorDataset(Dataset):
     '''Dataset wrapper for tensor features and labels with metadata.'''
-    def __init__(self, features: torch.Tensor, labels: torch.Tensor, df: pd.DataFrame = None, masks: torch.Tensor = None):
+    def __init__(self, features: torch.Tensor, labels: torch.Tensor, df: pd.DataFrame, masks: torch.Tensor):
         self.features = features
         self.labels = labels
         self.df = df
@@ -29,8 +29,7 @@ class TensorDataset(Dataset):
         return len(self.features)
     
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, dict, torch.Tensor]:
-        mask = self.masks[idx] if self.masks is not None else None
-        return self.features[idx], self.labels[idx], self.df.iloc[idx].to_dict(), mask
+        return self.features[idx], self.labels[idx], self.df.iloc[idx].to_dict(), self.masks[idx]
     
     @property
     def metadata(self) -> dict:
@@ -68,7 +67,6 @@ class ProbeDatasets(ABC):
         self.batch_size = batch_size
         self.random_seed = random_seed
         self.exclude_text = exclude_text
-        self.image_mask = None
         
         # Validate split proportions
         if not np.isclose(train_prop + test_prop + val_prop, 1.0):
@@ -93,23 +91,22 @@ class ProbeDatasets(ABC):
         mask_path = f'output/{self.task_name}/{self.model_name}/image_mask.pt'
         if not os.path.exists(mask_path):
             raise FileNotFoundError(f'Image mask file not found: {mask_path}')
-        self.image_mask = torch.load(mask_path, weights_only=True)
+        image_masks = torch.load(mask_path, weights_only=True)
         
         if self.exclude_text:
             # Apply mask for each sample individually
             masked_features = []
+            image_mask = []
             for i, sample in enumerate(features):
-                image_indices = torch.where(self.image_mask[i] == 1)[0]
-                masked_features.append(sample[image_indices])
+                image_indices = torch.where(image_masks[i] == 1)[0]
+                masked_features.append(sample[image_indices.to(features.device)])
+                image_mask.append(image_masks[i][image_indices])
             
             # Stack the masked features
             features = torch.stack(masked_features)
-            # Create new mask of all 1s matching masked features shape
-            masks = torch.ones((len(features), features.shape[1]), dtype=torch.bool)
-        else:
-            masks = self.image_mask
-            
-        return features, masks
+            image_masks = torch.stack(image_mask) # mask the masks if text is excluded
+
+        return features, image_masks
     
     def _create_split_indices(self, n_samples: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
@@ -153,21 +150,18 @@ class ProbeDatasets(ABC):
         
         # Create dataloaders
         train_loader = DataLoader(
-            TensorDataset(features[train_idx], labels[train_idx], df=df.iloc[train_idx], 
-                         masks=masks[train_idx] if masks is not None else None),
+            TensorDataset(features[train_idx], labels[train_idx], df.iloc[train_idx], masks[train_idx]),
             batch_size=self.batch_size,
             shuffle=True
         )
         
         test_loader = DataLoader(
-            TensorDataset(features[test_idx], labels[test_idx], df=df.iloc[test_idx],
-                         masks=masks[test_idx] if masks is not None else None),
+            TensorDataset(features[test_idx], labels[test_idx], df.iloc[test_idx], masks[test_idx]),
             batch_size=self.batch_size
         )
         
         val_loader = DataLoader(
-            TensorDataset(features[val_idx], labels[val_idx], df=df.iloc[val_idx],
-                         masks=masks[val_idx] if masks is not None else None),
+            TensorDataset(features[val_idx], labels[val_idx], df.iloc[val_idx], masks[val_idx]),
             batch_size=self.batch_size
         )
         return train_loader, test_loader, val_loader
