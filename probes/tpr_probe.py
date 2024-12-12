@@ -79,6 +79,13 @@ class TensorProductProbe(pl.LightningModule):
         self.save_masks = False
         
         pooler = MultiProbeAttentionPooler(input_dim, output_dim)
+        probe_mlp = SimpleMLP(input_dim, input_dim, output_dim)
+        self.net = PooledAttentionProbe(pooler, probe_mlp, softmax=False)
+
+    def test_step(self, batch, batch_idx):
+        output = self.loss(batch, mode='test')
+        
+        if self.save_masks:
             # Store the outputs
             self.test_attention_masks.append(output['attention'].detach().cpu())
             self.test_predictions.append(output['predictions'].detach().cpu())
