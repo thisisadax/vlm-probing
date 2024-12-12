@@ -60,7 +60,7 @@ def run(cfg: DictConfig) -> None:
         print(f"\nProcessing layer: {layer_name}")
         
         # Setup components for this layer
-        model, train_loader, test_loader, val_loader = setup(cfg, layer_name)
+        model, train_loader, test_loader, val_loader, full_loader = setup(cfg, layer_name)
         
         # Initialize callbacks and logger
         callbacks = instantiate_modules(cfg.get('callbacks'))
@@ -83,8 +83,11 @@ def run(cfg: DictConfig) -> None:
             val_dataloaders=val_loader
         )
         
-        # Test model
+        # Test model on test set
         trainer.test(dataloaders=test_loader)
+        
+        # Run inference on full dataset with mask saving enabled
+        trainer.test(model=model, dataloaders=full_loader, ckpt_path="best")
         
         # Cleanup
         if logger and not isinstance(logger, bool):

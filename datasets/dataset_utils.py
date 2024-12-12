@@ -164,4 +164,10 @@ class ProbeDatasets(ABC):
             TensorDataset(features[val_idx], labels[val_idx], df.iloc[val_idx], masks[val_idx]),
             batch_size=self.batch_size
         )
-        return train_loader, test_loader, val_loader
+        # Create a loader for the full dataset
+        full_loader = DataLoader(
+            TensorDataset(features, labels, df, masks),
+            batch_size=self.batch_size
+        )
+        
+        return train_loader, test_loader, val_loader, full_loader
