@@ -24,7 +24,15 @@ class BasePooledProbe(pl.LightningModule):
         pooler = AttentionPooler(input_dim, input_dim)
         probe_mlp = SimpleMLP(input_dim, input_dim, output_dim)
         self.net = PooledAttentionProbe(pooler, probe_mlp)
+        
+        # Initialize lists to store outputs
         self.outputs = []
+        self.save_masks = False
+        self.test_attention_masks = []
+        self.test_predictions = []
+        self.test_labels = []
+        self.test_metadata = []
+        
         self.output_dir = os.path.join('output', task_name, model_name, probe_name, layer_name, 'attention_patterns')
         
     def configure_optimizers(self):
@@ -52,8 +60,42 @@ class BasePooledProbe(pl.LightningModule):
         return output
     
     def test_step(self, batch, batch_idx):
-        return self.loss(batch, mode='test')
+        output = self.loss(batch, mode='test')
+        
+        if self.save_masks:
+            # Store the outputs
+            self.test_attention_masks.append(output['attention'].detach().cpu())
+            self.test_predictions.append(output['predictions'].detach().cpu())
+            self.test_labels.append(output['targets'].detach().cpu())
+            self.test_metadata.append(output['metadata'])
+            
+        return output
 
+    def on_test_epoch_end(self):
+        if self.test_attention_masks:  # Only save if we collected data
+            # Stack all tensors
+            attention_masks = torch.cat(self.test_attention_masks, dim=0)
+            predictions = torch.cat(self.test_predictions, dim=0)
+            labels = torch.cat(self.test_labels, dim=0)
+            
+            # Create save directory
+            save_dir = os.path.join('output', self.hparams.task_name, 
+                                  self.hparams.model_name, 
+                                  self.hparams.probe_name,
+                                  self.hparams.layer_name)
+            os.makedirs(save_dir, exist_ok=True)
+            
+            # Save tensors
+            torch.save(attention_masks, os.path.join(save_dir, 'attention_masks.pt'))
+            torch.save(predictions, os.path.join(save_dir, 'predictions.pt'))
+            torch.save(labels, os.path.join(save_dir, 'labels.pt'))
+            
+            # Clear the lists
+            self.test_attention_masks = []
+            self.test_predictions = []
+            self.test_labels = []
+            self.test_metadata = []
+            
     def _visualize_attention_patterns(self, outputs):
         if not self.hparams.visualize_attention:
             return
