@@ -63,10 +63,22 @@ class TensorProductProbe(pl.LightningModule):
         self.outputs.append(output)  # collect the validation epoch info
         return output
 
-    def test_step(self, batch, batch_idx, save_masks=False):
-        output = self.loss(batch, mode='test')
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int,
+                 task_name: str, model_name: str, lr: float = 5e-4,
+                 weight_decay: float = 1e-6, max_epochs: int = 20,
+                 visualize_attention: bool = False, sparsity_lambda: float = 0,
+                 probe_name: str = None, layer_name: str = None):
+        super().__init__()
+        self.save_hyperparameters()
         
-        if save_masks:
+        # Initialize lists to store test outputs
+        self.test_attention_masks = []
+        self.test_predictions = []
+        self.test_labels = []
+        self.test_metadata = []
+        self.save_masks = False
+        
+        pooler = MultiProbeAttentionPooler(input_dim, output_dim)
             # Store the outputs
             self.test_attention_masks.append(output['attention'].detach().cpu())
             self.test_predictions.append(output['predictions'].detach().cpu())

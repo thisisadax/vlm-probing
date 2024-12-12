@@ -87,7 +87,9 @@ def run(cfg: DictConfig) -> None:
         trainer.test(dataloaders=test_loader)
         
         # Run inference on full dataset with mask saving enabled
-        trainer.test(model=model, dataloaders=full_loader, ckpt_path="best")
+        model.save_masks = True
+        trainer.test(dataloaders=full_loader)
+        model.save_masks = False
         
         # Cleanup
         if logger and not isinstance(logger, bool):
