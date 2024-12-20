@@ -1,0 +1,6 @@
+lr: 2e-4
+weight_decay: 1e-6
+max_epochs: ${trainer.max_epochs}
+model_name: ${dataset.model_name}
+task_name: ${dataset.task_name}
+layer_name: ${dataset.layer_name}

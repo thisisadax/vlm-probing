@@ -5,12 +5,13 @@ from PIL import Image
 from typing import List, Tuple, Dict
 import matplotlib.colors as mcolors
 import itertools
+from skimage.transform import resize
 
-from tasks.task import Task
+from tasks.task_utils import Task
 from utils import paste_shape, color_shape, place_shapes
 
 class SceneDescription(Task):
-    """Task class for generating scenes with multiple objects of varying colors and shapes"""
+    '''Task class for generating scenes with multiple objects of varying colors and shapes'''
     
     def __init__(
         self,
@@ -29,9 +30,9 @@ class SceneDescription(Task):
         self.n_trials = n_trials
         self.size = size
         self.shapes = shapes
-        self.shape_inds = shape_inds
+        self.shape_inds = np.array(shape_inds)
         self.canvas_size = canvas_size
-        
+
         # Convert color names to RGB values
         self.colors = {color: np.array(mcolors.to_rgb(color)) * 255 
                       for color in colors}
@@ -41,14 +42,13 @@ class SceneDescription(Task):
             self.shapes, self.colors.keys()
         ))
         
-        super().__init__(**kwargs)
-        
         # Load shape images
-        self.shape_imgs = np.load(Path(self.data_dir) / 'imgs.npy')[self.shape_inds]
+        self.shape_imgs = np.load('data/imgs.npy')[self.shape_inds]
         self.shape_map = {shape: idx for idx, shape in enumerate(self.shapes)}
+        super().__init__(**kwargs)
 
     def generate_full_dataset(self) -> pd.DataFrame:
-        """Generate dataset of images with varying numbers of objects"""
+        '''Generate dataset of images with varying numbers of objects'''
         img_path = Path(self.data_dir) / self.task_name / 'images'
         img_path.mkdir(parents=True, exist_ok=True)
         
@@ -63,22 +63,23 @@ class SceneDescription(Task):
                     continue
                     
                 # Prepare all colored shapes
-                colored_shapes = []
+                all_shapes = []
                 for shape_name, color_name in selected_features:
                     shape_idx = self.shape_map[shape_name]
                     shape_img = self.shape_imgs[shape_idx]
                     colored_shape = color_shape(shape_img, self.colors[color_name])
-                    colored_shapes.append(colored_shape)
+                    resized_shape = resize(colored_shape, (3, self.size, self.size)) * 255
+                    all_shapes.append(resized_shape)
                 
                 # Place all shapes at once
                 try:
                     canvas, positions = place_shapes(
-                        colored_shapes,
+                        all_shapes,
                         canvas_size=self.canvas_size,
                         img_size=self.size
                     )
                 except ValueError:
-                    print(f"Warning: Failed to place objects in trial {trial}")
+                    print(f'Warning: Failed to place objects in trial {trial}')
                     continue
                 
                 # Save image and metadata
@@ -88,10 +89,10 @@ class SceneDescription(Task):
                 
                 # Record features and metadata
                 features_dict = {
-                    f"object_{i}": {
-                        "shape": shape,
-                        "color": color,
-                        "position": positions[i].tolist()
+                    f'object_{i}': {
+                        'shape': shape,
+                        'color': color,
+                        'position': positions[i].tolist()
                     }
                     for i, (shape, color) in enumerate(selected_features)
                 }
@@ -111,13 +112,9 @@ class SceneDescription(Task):
         return pd.DataFrame(metadata)
     
     def _sample_features(self, n_objects: int) -> List[Tuple[str, str]]:
-        """Sample n_objects unique feature combinations"""
+        '''Sample n_objects unique feature combinations'''
         if n_objects > len(self.feature_combinations):
-            print(f"Warning: Requested {n_objects} objects but only {len(self.feature_combinations)} combinations available")
+            print(f'Warning: Requested {n_objects} objects but only {len(self.feature_combinations)} combinations available')
             return None
-            
-        return list(np.random.choice(
-            self.feature_combinations, 
-            size=n_objects, 
-            replace=False
-        ))
+        indices = np.random.choice(len(self.feature_combinations), size=n_objects, replace=False)
+        return [self.feature_combinations[i] for i in indices]

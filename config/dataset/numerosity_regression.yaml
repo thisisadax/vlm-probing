@@ -1,0 +1,4 @@
+defaults:
+  - default
+_target_: datasets.numerosity_datasets.NumerosityRegressionDatasets
+task_name: numerosity_estimation

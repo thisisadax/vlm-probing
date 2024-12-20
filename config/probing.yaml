@@ -1,0 +1,19 @@
+task_name: probing
+seed: 1248
+n_threads: 4
+use_gpu: True
+defaults:
+  - _self_
+  - probe: pooled_regression_probe
+  - dataset: numerosity_regression
+  - logger: default
+  - callbacks: default
+  - paths: default
+  - trainer: default
+  - override hydra/hydra_logging: disabled  
+  - override hydra/job_logging: disabled
+
+hydra:  
+  output_subdir: null  
+  run:  
+    dir: .

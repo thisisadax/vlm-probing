@@ -1,0 +1,3 @@
+defaults:
+  - tensorboard
+  - _self_

@@ -25,19 +25,19 @@ class TensorProductProbe(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         
-        # Initialize lists to store test outputs
-        self.test_attention_masks = []
-        self.test_predictions = []
-        self.test_labels = []
-        self.test_metadata = []
-        
         pooler = MultiProbeAttentionPooler(input_dim, output_dim)
         probe_mlp = SimpleMLP(input_dim, input_dim, output_dim)
         self.net = PooledAttentionProbe(pooler, probe_mlp, softmax=False)
 
         # Track examples from the validation loop.
         self.output_dir = os.path.join('output', task_name, model_name, probe_name, layer_name, 'attention_patterns')
+        
+        # Initialize lists to store outputs from the test phase
+        self.save_outputs = False # Set to True to save attention masks
         self.outputs = []
+        self.test_attention_masks = []
+        self.test_predictions = []
+        self.test_labels = []
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(
@@ -63,34 +63,14 @@ class TensorProductProbe(pl.LightningModule):
         self.outputs.append(output)  # collect the validation epoch info
         return output
 
-    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int,
-                 task_name: str, model_name: str, lr: float = 5e-4,
-                 weight_decay: float = 1e-6, max_epochs: int = 20,
-                 visualize_attention: bool = False, sparsity_lambda: float = 0,
-                 probe_name: str = None, layer_name: str = None):
-        super().__init__()
-        self.save_hyperparameters()
-        
-        # Initialize lists to store test outputs
-        self.test_attention_masks = []
-        self.test_predictions = []
-        self.test_labels = []
-        self.test_metadata = []
-        self.save_masks = False
-        
-        pooler = MultiProbeAttentionPooler(input_dim, output_dim)
-        probe_mlp = SimpleMLP(input_dim, input_dim, output_dim)
-        self.net = PooledAttentionProbe(pooler, probe_mlp, softmax=False)
-
     def test_step(self, batch, batch_idx):
         output = self.loss(batch, mode='test')
         
-        if self.save_masks:
+        if self.save_outputs:
             # Store the outputs
             self.test_attention_masks.append(output['attention'].detach().cpu())
             self.test_predictions.append(output['predictions'].detach().cpu())
             self.test_labels.append(output['targets'].detach().cpu())
-            self.test_metadata.append(output['metadata'])
             
         return output
         
@@ -112,14 +92,33 @@ class TensorProductProbe(pl.LightningModule):
             torch.save(attention_masks, os.path.join(save_dir, 'attention_masks.pt'))
             torch.save(predictions, os.path.join(save_dir, 'predictions.pt'))
             torch.save(labels, os.path.join(save_dir, 'labels.pt'))
-            
-            # Clear the lists
-            self.test_attention_masks = []
-            self.test_predictions = []
-            self.test_labels = []
-            self.test_metadata = []
 
     def loss(self, batch, mode='train'):
+        xs, ys, metadata, masks = batch
+        logits, attention = self.forward(xs)
+        # extract the diagonal elements from the logits and ys
+        logits = torch.diagonal(logits, dim1=-2, dim2=-1)
+        ys_diag = torch.diagonal(ys, dim1=-2, dim2=-1)
+        logits = F.sigmoid(logits)
+        class_loss = F.mse_loss(logits, ys_diag)
+        loss = class_loss + self.hparams.sparsity_lambda * attention.abs().mean()
+        targets = ys.float()
+        predictions = logits > 0.5
+        accuracy = (predictions == ys_diag).float().mean() * 100
+
+        self.log(f'{mode}_loss', loss, on_epoch=True)
+        self.log(f'{mode}_acc', accuracy, on_epoch=True)
+        
+        return {
+            'loss': loss,
+            'predictions': logits,
+            'targets': targets,
+            'attention': attention,
+            'metadata': metadata,
+            'masks': masks
+        }
+
+    def loss_OLD(self, batch, mode='train'):
         xs, ys, metadata, masks = batch
         logits, attention = self.forward(xs)
         logits = F.sigmoid(logits)
@@ -143,7 +142,7 @@ class TensorProductProbe(pl.LightningModule):
         
         return {
             'loss': loss,
-            'predictions': predictions,
+            'predictions': logits,
             'targets': targets,
             'attention': attention,
             'metadata': metadata,
@@ -171,6 +170,7 @@ class TensorProductProbe(pl.LightningModule):
         '''Visualize feature conjunction accuracies as a bar plot'''
         preds = self.outputs['predictions']
         targets = self.outputs['targets']
+        preds = F.softmax(preds, dim=-1).argmax(dim=-1)
 
         # Calculate per-class accuracies
         class_accuracies = (preds == targets).float().mean(dim=0)

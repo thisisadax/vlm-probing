@@ -30,7 +30,7 @@ def setup(cfg: DictConfig, layer_name: str = None) -> Tuple:
     
     # Load dataset first to determine dimensions
     dataset = hydra.utils.instantiate(cfg.dataset)
-    train_loader, test_loader, val_loader = dataset.load()
+    train_loader, test_loader, val_loader, full_loader = dataset.load()
     
     # Get dimensions from the dataset
     input_dim = train_loader.dataset.features.shape[-1]
@@ -44,7 +44,7 @@ def setup(cfg: DictConfig, layer_name: str = None) -> Tuple:
         output_dim=output_dim
     )
     
-    return probe, train_loader, test_loader, val_loader
+    return probe, train_loader, test_loader, val_loader, full_loader
 
 # Project root setup
 root = pyrootutils.setup_root(__file__, dotenv=True, pythonpath=True)
@@ -87,9 +87,8 @@ def run(cfg: DictConfig) -> None:
         trainer.test(dataloaders=test_loader)
         
         # Run inference on full dataset with mask saving enabled
-        model.save_masks = True
+        model.save_outputs = True
         trainer.test(dataloaders=full_loader)
-        model.save_masks = False
         
         # Cleanup
         if logger and not isinstance(logger, bool):

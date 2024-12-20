@@ -1,0 +1,13 @@
+The following image contains multiple simple, colored objects.
+The possible shapes that may be present in the image are: <airplane, triangle, umbrella, heart, star, circle, square>.
+The possible colors that may be present in the image are: <red, blue, green, purple>.
+Describe each object in the image in the form of a JSON object detailing the color and shape of each item.
+You must answer only with the json array of objects, without any additional information or text.
+For example, if the image contains a purple airplace, green triangle, blue umbrella, and purple square you would respond:
+
+[
+    {"shape": "airplane", "color": "purple"},
+    {"shape": "triangle", "color": "green"},
+    {"shape": "umbrella", "color": "blue"},
+    {"shape": "purple", "color": "square"}
+]

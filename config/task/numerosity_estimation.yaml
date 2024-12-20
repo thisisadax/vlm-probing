@@ -1,0 +1,8 @@
+defaults:
+  - default
+_target_: tasks.numerosity.NumerosityTask
+task_name: 'numerosity_estimation' # Name of the task
+min_dots: 1
+max_dots: 10
+n_trials: 200 # Number of trials to generate per condition
+prompt_path: '${.root_dir}/prompts/numerosity_estimation.txt'

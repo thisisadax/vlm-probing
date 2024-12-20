@@ -27,11 +27,10 @@ class BasePooledProbe(pl.LightningModule):
         
         # Initialize lists to store outputs
         self.outputs = []
-        self.save_masks = False
+        self.save_outputs = False
         self.test_attention_masks = []
         self.test_predictions = []
         self.test_labels = []
-        self.test_metadata = []
         
         self.output_dir = os.path.join('output', task_name, model_name, probe_name, layer_name, 'attention_patterns')
         
@@ -62,12 +61,11 @@ class BasePooledProbe(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         output = self.loss(batch, mode='test')
         
-        if self.save_masks:
+        if self.save_outputs:
             # Store the outputs
             self.test_attention_masks.append(output['attention'].detach().cpu())
             self.test_predictions.append(output['predictions'].detach().cpu())
             self.test_labels.append(output['targets'].detach().cpu())
-            self.test_metadata.append(output['metadata'])
             
         return output
 
@@ -94,7 +92,6 @@ class BasePooledProbe(pl.LightningModule):
             self.test_attention_masks = []
             self.test_predictions = []
             self.test_labels = []
-            self.test_metadata = []
             
     def _visualize_attention_patterns(self, outputs):
         if not self.hparams.visualize_attention:

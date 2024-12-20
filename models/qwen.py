@@ -5,14 +5,14 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
-from typing import Dict, List, Optional, Union
+from typing import Dict, List
 import torch
 from transformers import AutoProcessor
 from qwen_vl_utils import process_vision_info
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
 
 from models.model import Model
-from tasks.task import Task
+from tasks.task_utils import Task
 from utils import get_attr_or_item
 
 
@@ -43,18 +43,17 @@ class Qwen(Model):
                                                                      torch_dtype='auto', 
                                                                      device_map='auto', 
                                                                      local_files_only=True)
-        self.processor = AutoProcessor.from_pretrained('Qwen/Qwen2-VL-7B-Instruct')
-        self.model.to(self.device)
+        self.processor = AutoProcessor.from_pretrained('Qwen/Qwen2-VL-7B-Instruct') 
 
         # Set probe layers - either use provided config or detect all MLPs
-        self.probe_layers = probe_layers if probe_layers is not None else self.detect_all_mlp_layers()
+        self.probe_layers = probe_layers if probe_layers is not None else self._detect_all_mlp_layers()
         
         # Register hooks if probe_layers are specified
         if self.probe_layers:
-            self.register_hooks()
+            self._register_hooks()
 
-    def detect_all_mlp_layers(self) -> Dict:
-        """Detect all MLP down_proj layers in the model and create a probe configuration."""
+    def _detect_all_mlp_layers(self) -> Dict:
+        '''Detect all MLP down_proj layers in the model and create a probe configuration.'''
         probe_config = {}
         
         # Get number of layers in the model
@@ -68,57 +67,50 @@ class Qwen(Model):
         return probe_config
     
 
-    def getActivations(self, name):
+    def _get_activations(self, name):
         def hook(model, input, output):
             try:
                 if isinstance(output, tuple):
                     output = output[0]
-                
                 # Only collect if sequence length > 1 (not generation phase)
                 if output.size(1) > 1:
+                    output = output.detach().cpu()
                     try:
-                        self.activations[name].append(output.detach().cpu())
+                        self.activations[name].append(output)
                     except KeyError:
-                        self.activations[name] = [output.detach().cpu()]
-                    #print(f'{name} Shape: {output.shape}')
-                    
+                        self.activations[name] = [output]     
             except Exception as e:
                 print(f'Error in hook for {name}: {str(e)}')
-                
         return hook
 
 
-    def register_hooks(self):
-        """Register forward hooks for specified layers."""
+    def _register_hooks(self):
+        '''Register forward hooks for specified layers.'''
         for layer_name, layer_path in self.probe_layers.items():
             if isinstance(layer_path, str):
                 layer_path = layer_path.split('.')
             target = reduce(get_attr_or_item, layer_path, self.model)
-            target.register_forward_hook(self.getActivations(layer_name))
+            target.register_forward_hook(self._get_activations(layer_name))
 
 
     def get_image_mask(self, input_ids: torch.Tensor) -> torch.Tensor:
-        """Compute binary mask indicating image token positions."""
+        '''Compute binary mask indicating image token positions.'''
         image_mask = torch.zeros_like(input_ids, dtype=torch.bool)
         
         # Get vision special token IDs
         image_start_token = self.processor.tokenizer.convert_tokens_to_ids(['<|vision_start|>'])[0]
         image_end_token = self.processor.tokenizer.convert_tokens_to_ids(['<|vision_end|>'])[0]
         
-        # Find positions of image tokens
-        start_indices = torch.where(input_ids == image_start_token)[0]
-        end_indices = torch.where(input_ids == image_end_token)[0]
-        
-        # Set mask for image tokens
-        for start, end in zip(start_indices, end_indices):
-            image_mask[start:end+1] = True
-            
-        return image_mask
+        # Find positions of image tokens (assumes only 1 image)
+        start_idx = torch.where(input_ids == image_start_token)[0][0]
+        end_idx = torch.where(input_ids == image_end_token)[0][0]
+        image_mask[start_idx:end_idx+1] = True
+        return image_mask.reshape(1,-1)
 
     def run_batch(self, batch_df: pd.DataFrame) -> pd.DataFrame:
-        """Run inference on a batch of DataFrame rows."""
+        '''Run inference on a batch of DataFrame rows.'''
         # Convert rows to messages
-        batch_messages = [self.encode_trial(row) for _, row in batch_df.iterrows()]
+        batch_messages = [self._encode_trial(row) for _, row in batch_df.iterrows()]
         
         # Prepare inputs
         texts = [
@@ -169,21 +161,21 @@ class Qwen(Model):
         return batch_df
 
 
-    def encode_trial(self, row) -> List[dict]:
-        """Convert a dataframe row into the expected message format."""
+    def _encode_trial(self, row) -> List[dict]:
+        '''Convert a dataframe row into the expected message format.'''
         return [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {'role': 'system', 'content': 'You are a helpful assistant.'},
             {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": f"file://{row['path']}"},
-                    {"type": "text", "text": self.task.prompt},
+                'role': 'user',
+                'content': [
+                    {'type': 'image', 'image': f"file://{row['path']}"},
+                    {'type': 'text', 'text': self.task.prompt},
                 ],
             }
         ]
 
     def run(self) -> pd.DataFrame:
-        """Run inference on all trials in batches and return updated DataFrame."""
+        '''Run inference on all trials in batches and return updated DataFrame.'''
         # Split dataframe into batches
         batches = np.array_split(
             self.task.results_df,
@@ -214,7 +206,7 @@ class Qwen(Model):
             mask_path = os.path.join(
                 self.task.output_dir,
                 self.task.task_name,
-                Path(self.task.model_name),
+                self.task.model_name,
                 'image_mask.pt'
             )
             os.makedirs(os.path.dirname(mask_path), exist_ok=True)
@@ -223,11 +215,11 @@ class Qwen(Model):
         return final_df
 
     def save_activations(self):
-        """Save extracted activations to disk as PyTorch tensors and clear buffer."""
+        '''Save extracted activations to disk as PyTorch tensors and clear buffer.'''
         outpath = os.path.join(
             self.task.output_dir, 
             self.task.task_name,
-            Path(self.task.model_name),
+            self.task.model_name,
             'activations'
         )
         os.makedirs(outpath, exist_ok=True)

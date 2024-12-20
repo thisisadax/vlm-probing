@@ -1,11 +1,9 @@
 # https://www.tensorflow.org/tensorboard/
 
 tensorboard:
-  _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger
-  save_dir: "output"
-  name: "${task_name}"
+  _target_: loggers.logger.MetricsLogger #lightning.pytorch.loggers.TensorBoardLogger #lightning.pytorch.loggers.tensorboard.TensorBoardLogger
+  save_dir: "${paths.output_dir}/${dataset.task_name}/${dataset.model_name}/${probe.probe_name}/${dataset.layer_name}/"
+  name: 'logs'
   version: null
   log_graph: False
-  default_hp_metric: True
-  prefix: ""
-  flush_secs: 30
+  prefix: ''

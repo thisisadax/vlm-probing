@@ -1,0 +1,10 @@
+defaults:
+  - model_checkpoint
+  - lr_monitor
+  - _self_
+
+model_checkpoint:
+  dirpath: ${paths.output_dir}/${dataset.task_name}/${dataset.model_name}/${probe.probe_name}/checkpoints
+  monitor: "val_acc"
+  mode: "max"
+  auto_insert_metric_name: False

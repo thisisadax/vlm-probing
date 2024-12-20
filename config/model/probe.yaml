@@ -1,8 +1,0 @@
-_target_: probes.LightningProbe
-
-# Training hyperparameters
-lr: 5e-4
-weight_decay: 1e-6
-max_epochs: 20
-
-# Note: input_dim, hidden_dim, and output_dim are now determined automatically from the dataset

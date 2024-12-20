@@ -4,18 +4,18 @@ _target_: tasks.scene_description.SceneDescription
 task_name: 'scene_description'  # Name of the task
 
 # Object parameters
-min_objects: 1
-max_objects: 4
-n_trials: 200  # Number of trials to generate per condition
-size: 40  # Size of individual shapes
+min_objects: 10
+max_objects: 12
+n_trials: 2000  # Number of trials to generate per condition
+size: 60  # Size of individual shapes
 
 # Canvas parameters
-canvas_size: [256, 256]
+canvas_size: [512, 512]
 
 # Available shapes and colors
-shapes: ['circle', 'square', 'triangle']
-shape_inds: [0, 1, 2]  # Indices corresponding to shapes in imgs.npy
-colors: ['red', 'blue', 'green', 'yellow']
+shapes: ['airplane', 'triangle', 'umbrella', 'heart', 'star', 'circle', 'square']
+shape_inds: [6, 9, 34, 96, 98, 100, 101]  # Indices corresponding to shapes in data/imgs.npy
+colors: ['red', 'blue', 'green', 'purple']
 
 # Prompt configuration
 prompt_path: '${.root_dir}/prompts/scene_description.txt'

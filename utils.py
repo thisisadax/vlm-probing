@@ -9,41 +9,7 @@ import torch
 def tensor_to_array(x):
     return x.detach().cpu().numpy() if isinstance(x, torch.Tensor) else x
 
-def collect_outputs(outputs, keys=['predictions', 'targets', 'attention', 'masks']):                                  
-    '''                                                                                                               
-    Collects outputs from the lightning validation loop, concatenating tensors/floats and                             
-    converting the 'metadata' field to a DataFrame.                                                                   
-    '''                                                                                                               
-    if not outputs:                                                                                                   
-        return {}                                                                                                     
-                                                                                                                    
-    # First collect all tensors to get the correct total length                                                       
-    tensors = {}                                                                                                      
-    for key in keys:                                                                                                  
-        tensors[key] = torch.cat([x[key] for x in outputs]).squeeze().cpu()                                           
-                                                                                                                    
-    # Now process metadata to match tensor length                                                                     
-    metadata_dicts = []                                                                                               
-    for batch in outputs:                                                                                             
-        batch_metadata = batch['metadata']                                                                            
-        if isinstance(batch_metadata, dict):                                                                          
-            # Single metadata dict - expand to match batch size
-            batch_size = len(batch['predictions'])
-            metadata_dicts.extend([batch_metadata] * batch_size)                                                     
-        else:                                                                                                         
-            # List of metadata dicts
-            metadata_dicts.extend(batch_metadata)                                                       
-                                                                                                                    
-    metadata = pd.DataFrame(metadata_dicts)                                                           
-                                                                                                                    
-    # Verify alignment                                                                                                
-    expected_length = len(tensors[keys[0]])                                                                           
-    if len(metadata) != expected_length:                                                                              
-        raise ValueError(f"Metadata length ({len(metadata)}) doesn't match tensor length ({expected_length})")        
-                                                                                                                    
-    return {**tensors, 'metadata': metadata}
-
-def collect_outputs_OLD(outputs, keys=['predictions', 'targets', 'attention', 'masks']):
+def collect_outputs(outputs, keys=['predictions', 'targets', 'attention', 'masks']):
     '''
     Collects outputs from the lightning validation loop, concatenating tensors/floats and 
     converting the 'metadata' field to a DataFrame.
@@ -60,8 +26,8 @@ def collect_outputs_OLD(outputs, keys=['predictions', 'targets', 'attention', 'm
     
     metadata = [{k: tensor_to_array(v) for k, v in batch['metadata'].items()} for batch in outputs]
     metadata = pd.concat([pd.DataFrame(x) for x in metadata])
-    #print(metadata.shape)
-    #print(metadata)
+    print('metadata.shape: ', metadata.shape)
+    print('metadata: ', metadata)
     
     # Process each key
     tensors = {}

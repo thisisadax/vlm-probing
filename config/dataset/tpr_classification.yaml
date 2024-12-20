@@ -1,0 +1,4 @@
+defaults:
+  - default
+_target_: datasets.tpr_datasets.TPRDatasets
+task_name: tpr_classification
