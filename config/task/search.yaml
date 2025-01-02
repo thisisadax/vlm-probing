@@ -13,8 +13,18 @@ shapes:
   - circle
   - square
   - triangle
+  - cross
+  - pentagon
+  - hexagon
+  - star
+  - heart
 shape_inds:
-  - 0
-  - 1
-  - 2
+  - 0  # circle
+  - 1  # square  
+  - 2  # triangle
+  - 3  # cross
+  - 4  # pentagon
+  - 5  # hexagon
+  - 6  # star
+  - 7  # heart
 canvas_size: [512, 512]
