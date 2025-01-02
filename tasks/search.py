@@ -145,8 +145,7 @@ class SearchTrial:
 class SearchTask(Task):
     def __init__(
         self,
-        min_objects: int,
-        max_objects: int,
+        n_objects: List[int],
         n_trials: int,
         size: int,
         colors: List[str],
@@ -155,8 +154,7 @@ class SearchTask(Task):
         canvas_size: Tuple[int, int] = (512, 512),
         **kwargs
     ):
-        self.min_objects = min_objects
-        self.max_objects = max_objects
+        self.n_objects = n_objects
         self.n_trials = n_trials
         self.size = size
         self.colors = colors
@@ -206,7 +204,7 @@ class SearchTask(Task):
         metadata = []
         trial_counter = 0
         
-        for n_objects in range(self.min_objects, self.max_objects + 1):
+        for n_objects in self.n_objects:
             for search_type in SearchType:
                 for _ in range(self.n_trials):
                     # Create one target-present and one target-absent trial
