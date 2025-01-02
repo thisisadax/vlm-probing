@@ -236,7 +236,7 @@ class SearchTask(Task):
                     img = self.render_trial(trial)
                     
                     # Save image
-                    filename = f'n={n_objects}_type={search_type.value}_trial={trial_num}.png'
+                    filename = f'n={n_objects}_type={search_type.value}_trial={trial_counter}.png'
                     save_path = img_path / filename
                     img.save(save_path)
                     
