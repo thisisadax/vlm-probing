@@ -250,20 +250,20 @@ class SearchTask(Task):
                         
                         # Create n_conjunction_repeats trials for this combination
                         for repeat in range(self.n_conjunction_repeats):
-                        trial = SearchTrial(
-                            search_type=search_type,
-                            n_objects=n_objects,
-                            trial_num=trial_counter,
-                            colors=self.colors,
-                            shapes=self.shapes,
-                            size=self.size,
-                            canvas_size=self.canvas_size,
-                            target_color=target_color,
-                            target_shape=target_shape,
-                            distractor_color=distractor_color,
-                            distractor_shape=distractor_shape
-                        )
-                        trial_counter += 1
+                            trial = SearchTrial(
+                                search_type=search_type,
+                                n_objects=n_objects,
+                                trial_num=trial_counter,
+                                colors=self.colors,
+                                shapes=self.shapes,
+                                size=self.size,
+                                canvas_size=self.canvas_size,
+                                target_color=target_color,
+                                target_shape=target_shape,
+                                distractor_color=distractor_color,
+                                distractor_shape=distractor_shape
+                            )
+                            trial_counter += 1
                     img = self.render_trial(trial)
                     
                     # Save image
