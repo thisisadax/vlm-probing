@@ -5,9 +5,10 @@ import pandas as pd
 from PIL import Image
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
+import numpy as np
 
 from tasks.task_utils import Task
-from utils import paste_shape, place_shapes
+from utils import paste_shape
 
 class SearchType(Enum):
     CONJUNCTIVE = 'conjunctive'
@@ -52,11 +53,40 @@ class SearchTrial:
         colors: List[str],
         shapes: List[str]
     ) -> List[SearchObject]:
-        """Create objects for the trial with positions determined later"""
+        """Create objects for the trial with random positions"""
         objects = []
         
-        # Create target object (position will be set later)
-        objects.append(SearchObject(0, 0, self.size, self.target_color, self.target_shape, True))
+        # Calculate valid position range
+        margin = self.size // 2
+        min_x = margin
+        max_x = self.canvas_size[0] - margin
+        min_y = margin
+        max_y = self.canvas_size[1] - margin
+        
+        # Keep track of occupied positions
+        occupied_positions = set()
+        
+        def get_valid_position():
+            for _ in range(1000):  # Maximum attempts
+                x = np.random.randint(min_x, max_x)
+                y = np.random.randint(min_y, max_y)
+                
+                # Check if position is far enough from other objects
+                valid = True
+                for pos in occupied_positions:
+                    if np.sqrt((x - pos[0])**2 + (y - pos[1])**2) < self.size:
+                        valid = False
+                        break
+                
+                if valid:
+                    occupied_positions.add((x, y))
+                    return x, y
+            
+            raise RuntimeError("Could not find valid position")
+        
+        # Create target object
+        x, y = get_valid_position()
+        objects.append(SearchObject(x, y, self.size, self.target_color, self.target_shape, True))
         
         # Create distractors
         for _ in range(self.n_objects - 1):
@@ -72,21 +102,9 @@ class SearchTrial:
                 # Share no features with target
                 color = np.random.choice([c for c in colors if c != self.target_color])
                 shape = np.random.choice([s for s in shapes if s != self.target_shape])
-                
-            objects.append(SearchObject(0, 0, self.size, color, shape, False))
-        
-        # Place all objects at once using place_shapes
-        try:
-            _, positions = place_shapes(
-                [np.zeros((3, self.size, self.size))] * len(objects),
-                canvas_size=self.canvas_size,
-                img_size=self.size
-            )
-            # Update object positions
-            for obj, pos in zip(objects, positions):
-                obj.x, obj.y = pos
-        except ValueError:
-            raise RuntimeError("Failed to place objects")
+            
+            x, y = get_valid_position()
+            objects.append(SearchObject(x, y, self.size, color, shape, False))
             
         return objects
     
@@ -121,8 +139,12 @@ class SearchTask(Task):
         self.size = size
         self.colors = colors
         self.shapes = shapes
-        self.shape_inds = shape_inds
+        self.shape_inds = np.array(shape_inds)
         self.canvas_size = canvas_size
+        
+        # Load shape images
+        self.shape_imgs = np.load('data/imgs.npy')[self.shape_inds]
+        self.shape_map = {shape: idx for idx, shape in enumerate(self.shapes)}
         
         super().__init__(**kwargs)
 
