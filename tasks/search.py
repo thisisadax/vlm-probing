@@ -22,26 +22,6 @@ class SearchObject:
     shape: str
     is_target: bool
 
-class ObjectPlacer:
-    """Handles object placement with collision detection"""
-    def __init__(self, canvas_size: Tuple[int, int], min_spacing: int):
-        self.canvas_size = canvas_size
-        self.min_spacing = min_spacing
-        self.positions: List[Tuple[int, int]] = []
-        
-    def place_object(self, size: int, max_attempts: int = 1000) -> Optional[Tuple[int, int]]:
-        """Get valid non-overlapping position or None if placement fails"""
-        for _ in range(max_attempts):
-            x = np.random.randint(size, self.canvas_size[0] - size)
-            y = np.random.randint(size, self.canvas_size[1] - size)
-            
-            if not self.positions or all(
-                (x-px)**2 + (y-py)**2 > self.min_spacing**2 
-                for px, py in self.positions
-            ):
-                self.positions.append((x, y))
-                return x, y
-        return None
 
 class SearchTrial:
     """Represents a single search trial"""
@@ -64,29 +44,22 @@ class SearchTrial:
         self.target_color = np.random.choice(colors)
         self.target_shape = np.random.choice(shapes)
         
-        # Place objects
-        placer = ObjectPlacer(canvas_size, min_spacing=size*2)
-        self.objects = self._create_objects(placer, colors, shapes)
+        # Create and place objects
+        self.objects = self._create_objects(colors, shapes)
         
     def _create_objects(
-        self, 
-        placer: ObjectPlacer,
+        self,
         colors: List[str],
         shapes: List[str]
     ) -> List[SearchObject]:
-        """Create and place all objects for the trial"""
+        """Create objects for the trial with positions determined later"""
         objects = []
         
-        # Place target
-        if (pos := placer.place_object(self.size)) is None:
-            raise RuntimeError("Failed to place target")
-        objects.append(SearchObject(*pos, self.size, self.target_color, self.target_shape, True))
+        # Create target object (position will be set later)
+        objects.append(SearchObject(0, 0, self.size, self.target_color, self.target_shape, True))
         
-        # Place distractors
+        # Create distractors
         for _ in range(self.n_objects - 1):
-            if (pos := placer.place_object(self.size)) is None:
-                raise RuntimeError("Failed to place distractor")
-                
             if self.search_type == SearchType.CONJUNCTIVE:
                 # Share one feature with target
                 if np.random.random() < 0.5:
@@ -100,7 +73,20 @@ class SearchTrial:
                 color = np.random.choice([c for c in colors if c != self.target_color])
                 shape = np.random.choice([s for s in shapes if s != self.target_shape])
                 
-            objects.append(SearchObject(*pos, self.size, color, shape, False))
+            objects.append(SearchObject(0, 0, self.size, color, shape, False))
+        
+        # Place all objects at once using place_shapes
+        try:
+            _, positions = place_shapes(
+                [np.zeros((3, self.size, self.size))] * len(objects),
+                canvas_size=self.canvas_size,
+                img_size=self.size
+            )
+            # Update object positions
+            for obj, pos in zip(objects, positions):
+                obj.x, obj.y = pos
+        except ValueError:
+            raise RuntimeError("Failed to place objects")
             
         return objects
     
@@ -142,18 +128,24 @@ class SearchTask(Task):
 
     def render_trial(self, trial: SearchTrial) -> Image.Image:
         """Create image for a trial"""
-        img = Image.new('RGB', self.canvas_size, 'white')
-        for obj in trial.objects:
-            shape_idx = self.shape_inds[self.shapes.index(obj.shape)]
+        canvas = Image.new('RGB', self.canvas_size, 'white')
+        
+        # Prepare all shapes at once
+        shape_indices = [self.shape_inds[self.shapes.index(obj.shape)] for obj in trial.objects]
+        positions = np.array([[obj.x, obj.y] for obj in trial.objects])
+        sizes = np.array([obj.size for obj in trial.objects])
+        
+        # Place all shapes in one go
+        for i, shape_idx in enumerate(shape_indices):
             paste_shape(
                 shape=np.array([shape_idx]),
-                positions=np.array([[obj.x, obj.y]]),
-                sizes=np.array([obj.size]),
-                canvas_img=img,
+                positions=positions[i:i+1],
+                sizes=sizes[i:i+1],
+                canvas_img=canvas,
                 i=0,
-                img_size=obj.size
+                img_size=trial.objects[i].size
             )
-        return img
+        return canvas
 
     def generate_full_dataset(self) -> pd.DataFrame:
         """Generate dataset of images with both conjunctive and disjunctive search trials."""
