@@ -88,47 +88,47 @@ class SearchTrial:
     def _create_objects(self) -> List[SearchObject]:
         """Create objects for the trial with random positions"""
         positions = self._generate_positions()
-        objects = []
         
-        # Handle target present/absent cases
-        start_idx = 0
+        # Prepare colors and shapes for all objects
+        colors = []
+        shapes = []
+        is_targets = []
+        
+        # Add target if present
         if self.target_present:
-            # Create target object first
-            objects.append(SearchObject(
-                x=positions[0,0],
-                y=positions[0,1],
-                size=self.size,
-                color=self.target_color,
-                shape=self.target_shape,
-                is_target=True
-            ))
-            start_idx = 1
+            colors.append(self.target_color)
+            shapes.append(self.target_shape)
+            is_targets.append(True)
         
-        # Create distractors
-        for i in range(start_idx, self.n_objects):
+        # Add distractors
+        n_distractors = self.n_objects - (1 if self.target_present else 0)
+        for _ in range(n_distractors):
             if self.search_type == SearchType.CONJUNCTIVE:
                 # Share exactly one feature with target
                 if random.random() < 0.5:
-                    color = self.target_color
-                    shape = self.alt_shape
+                    colors.append(self.target_color)
+                    shapes.append(self.alt_shape)
                 else:
-                    color = self.alt_color
-                    shape = self.target_shape
+                    colors.append(self.alt_color)
+                    shapes.append(self.target_shape)
             else:  # DISJUNCTIVE
                 # Share no features with target
-                color = self.alt_color
-                shape = self.alt_shape
+                colors.append(self.alt_color)
+                shapes.append(self.alt_shape)
+            is_targets.append(False)
             
-            objects.append(SearchObject(
-                x=positions[i,0],
-                y=positions[i,1],
+        # Create all objects using list comprehension
+        return [
+            SearchObject(
+                x=int(pos[0]),
+                y=int(pos[1]),
                 size=self.size,
                 color=color,
                 shape=shape,
-                is_target=False
-            ))
-            
-        return objects
+                is_target=is_target
+            )
+            for pos, color, shape, is_target in zip(positions, colors, shapes, is_targets)
+        ]
     
     def to_metadata(self, image_path: str) -> Dict:
         """Convert trial data to metadata dictionary"""
