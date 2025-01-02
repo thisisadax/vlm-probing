@@ -89,33 +89,31 @@ class SearchTrial:
         """Create objects for the trial with random positions"""
         positions = self._generate_positions()
         
-        # Prepare colors and shapes for all objects
-        colors = []
-        shapes = []
+        # Define possible feature combinations for distractors
+        if self.search_type == SearchType.CONJUNCTIVE:
+            # Share exactly one feature with target
+            distractor_features = [
+                (self.target_color, self.alt_shape),
+                (self.alt_color, self.target_shape)
+            ]
+        else:  # DISJUNCTIVE
+            # Share no features with target
+            distractor_features = [(self.alt_color, self.alt_shape)]
+            
+        # Prepare features for all objects
+        features = []
         is_targets = []
         
         # Add target if present
         if self.target_present:
-            colors.append(self.target_color)
-            shapes.append(self.target_shape)
+            features.append((self.target_color, self.target_shape))
             is_targets.append(True)
         
         # Add distractors
         n_distractors = self.n_objects - (1 if self.target_present else 0)
-        for _ in range(n_distractors):
-            if self.search_type == SearchType.CONJUNCTIVE:
-                # Share exactly one feature with target
-                if random.random() < 0.5:
-                    colors.append(self.target_color)
-                    shapes.append(self.alt_shape)
-                else:
-                    colors.append(self.alt_color)
-                    shapes.append(self.target_shape)
-            else:  # DISJUNCTIVE
-                # Share no features with target
-                colors.append(self.alt_color)
-                shapes.append(self.alt_shape)
-            is_targets.append(False)
+        distractor_idxs = np.random.choice(len(distractor_features), size=n_distractors)
+        features.extend([distractor_features[idx] for idx in distractor_idxs])
+        is_targets.extend([False] * n_distractors)
             
         # Create all objects using list comprehension
         return [
@@ -127,7 +125,7 @@ class SearchTrial:
                 shape=shape,
                 is_target=is_target
             )
-            for pos, color, shape, is_target in zip(positions, colors, shapes, is_targets)
+            for pos, (color, shape), is_target in zip(positions, features, is_targets)
         ]
     
     def to_metadata(self, image_path: str) -> Dict:
