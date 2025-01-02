@@ -51,6 +51,10 @@ class Task:
         """Generate the complete dataset for this task. Must be implemented by subclasses."""
         raise NotImplementedError
 
+    def get_prompt(self, row: pd.Series) -> str:
+        """Get the formatted prompt for a specific trial. Must be implemented by subclasses."""
+        raise NotImplementedError
+
     def num_remaining_trials(self):
         """Calculate number of remaining evaluation trials. Must be implemented by subclasses."""
         pass

@@ -169,7 +169,7 @@ class Qwen(Model):
                 'role': 'user',
                 'content': [
                     {'type': 'image', 'image': f"file://{row['path']}"},
-                    {'type': 'text', 'text': self.task.prompt},
+                    {'type': 'text', 'text': self.task.get_prompt(row)},
                 ],
             }
         ]

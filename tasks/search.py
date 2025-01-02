@@ -191,6 +191,13 @@ class SearchTask(Task):
             )
         return canvas
 
+    def get_prompt(self, row: pd.Series) -> str:
+        """Format the prompt template with the target color and shape for this trial."""
+        return self.prompt.format(
+            target_color=row['target_color'],
+            target_shape=row['target_shape']
+        )
+        
     def generate_full_dataset(self) -> pd.DataFrame:
         """Generate dataset of images with both conjunctive and disjunctive search trials."""
         img_path = Path(self.data_dir) / self.task_name / 'images'
