@@ -46,8 +46,71 @@ class SearchTask(Task):
         
         super().__init__(**kwargs)
 
+    def _get_valid_position(self, positions: List[Tuple[int, int]]) -> Tuple[int, int]:
+        """Get a valid non-overlapping position for a new object."""
+        while True:
+            x = np.random.randint(0, self.canvas_size[0])
+            y = np.random.randint(0, self.canvas_size[1])
+            if not positions or all((x-px)**2 + (y-py)**2 > (self.size*2)**2 for px, py in positions):
+                return x, y
+
+    def make_conjunctive_trial(self, n_objects: int) -> List[SearchObject]:
+        """Generate objects for a conjunctive search trial."""
+        target_color = np.random.choice(self.colors)
+        target_shape = np.random.choice(self.shapes)
+        
+        objects = []
+        positions = []
+        
+        # Add target
+        x, y = self._get_valid_position(positions)
+        objects.append(SearchObject(x, y, self.size, target_color, target_shape, True))
+        positions.append((x, y))
+        
+        # Add distractors that share one feature with target
+        for _ in range(n_objects - 1):
+            x, y = self._get_valid_position(positions)
+            
+            if np.random.random() < 0.5:
+                # Share color, different shape
+                color = target_color
+                shape = np.random.choice([s for s in self.shapes if s != target_shape])
+            else:
+                # Share shape, different color
+                color = np.random.choice([c for c in self.colors if c != target_color])
+                shape = target_shape
+                
+            objects.append(SearchObject(x, y, self.size, color, shape, False))
+            positions.append((x, y))
+            
+        return objects
+
+    def make_disjunctive_trial(self, n_objects: int) -> List[SearchObject]:
+        """Generate objects for a disjunctive search trial."""
+        target_color = np.random.choice(self.colors)
+        target_shape = np.random.choice(self.shapes)
+        
+        objects = []
+        positions = []
+        
+        # Add target
+        x, y = self._get_valid_position(positions)
+        objects.append(SearchObject(x, y, self.size, target_color, target_shape, True))
+        positions.append((x, y))
+        
+        # Add distractors with no shared features
+        for _ in range(n_objects - 1):
+            x, y = self._get_valid_position(positions)
+            color = np.random.choice([c for c in self.colors if c != target_color])
+            shape = np.random.choice([s for s in self.shapes if s != target_shape])
+            
+            objects.append(SearchObject(x, y, self.size, color, shape, False))
+            positions.append((x, y))
+            
+        return objects
+
     def generate_full_dataset(self) -> pd.DataFrame:
-        '''Generate dataset of images with both conjunctive and disjunctive search trials.'''
+        """Generate dataset of images with both conjunctive and disjunctive search trials."""
         img_path = Path(self.data_dir) / self.task_name / 'images'
         img_path.mkdir(parents=True, exist_ok=True)
         
@@ -55,47 +118,11 @@ class SearchTask(Task):
         for n_objects in range(self.min_objects, self.max_objects + 1):
             for search_type in SearchType:
                 for trial in range(self.n_trials):
-                    # Select target properties
-                    target_color = np.random.choice(self.colors)
-                    target_shape = np.random.choice(self.shapes)
-                    target_shape_idx = self.shape_inds[self.shapes.index(target_shape)]
-                    
-                    # Generate objects
-                    objects = []
-                    positions = []
-                    sizes = []
-                    
-                    # Add target
-                    x = np.random.randint(0, self.canvas_size[0])
-                    y = np.random.randint(0, self.canvas_size[1])
-                    objects.append(SearchObject(x, y, self.size, target_color, target_shape, True))
-                    positions.append((x, y))
-                    sizes.append(self.size)
-                    
-                    # Add distractors
-                    for _ in range(n_objects - 1):
-                        while True:
-                            x = np.random.randint(0, self.canvas_size[0])
-                            y = np.random.randint(0, self.canvas_size[1])
-                            if all((x-px)**2 + (y-py)**2 > (self.size*2)**2 for px, py in positions):
-                                break
-                        
-                        if search_type == SearchType.CONJUNCTIVE:
-                            # For conjunctive search, distractors share one feature
-                            if np.random.random() < 0.5:
-                                color = target_color
-                                shape = np.random.choice([s for s in self.shapes if s != target_shape])
-                            else:
-                                color = np.random.choice([c for c in self.colors if c != target_color])
-                                shape = target_shape
-                        else:  # DISJUNCTIVE
-                            # For disjunctive search, distractors share no features
-                            color = np.random.choice([c for c in self.colors if c != target_color])
-                            shape = np.random.choice([s for s in self.shapes if s != target_shape])
-                            
-                        objects.append(SearchObject(x, y, self.size, color, shape, False))
-                        positions.append((x, y))
-                        sizes.append(self.size)
+                    # Generate objects based on search type
+                    if search_type == SearchType.CONJUNCTIVE:
+                        objects = self.make_conjunctive_trial(n_objects)
+                    else:
+                        objects = self.make_disjunctive_trial(n_objects)
                     
                     # Create image
                     img = Image.new('RGB', self.canvas_size, 'white')
@@ -110,17 +137,20 @@ class SearchTask(Task):
                             img_size=obj.size
                         )
                     
+                    # Save image
                     filename = f'n={n_objects}_type={search_type.value}_trial={trial}.png'
                     save_path = img_path / filename
                     img.save(save_path)
                     
+                    # Get target properties from first object (which is always the target)
+                    target = objects[0]
                     metadata.append({
                         'path': str(save_path),
                         'n_objects': n_objects,
                         'search_type': search_type.value,
                         'trial': trial,
-                        'target_color': target_color,
-                        'target_shape': target_shape,
+                        'target_color': target.color,
+                        'target_shape': target.shape,
                         'objects_data': [vars(obj) for obj in objects]
                     })
         
