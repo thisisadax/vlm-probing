@@ -169,11 +169,6 @@ class Search(Task):
         self.shape_imgs = np.load('data/imgs.npy')[self.shape_inds]
         self.shape_map = {shape: idx for idx, shape in enumerate(self.shapes)}
         
-        # Load prompt template from file
-        prompt_path = Path('prompts/search.txt')
-        with open(prompt_path) as f:
-            self.prompt = f.read().strip()
-        
         super().__init__(**kwargs)
 
     def render_trial(self, trial: SearchTrial) -> Image.Image:
