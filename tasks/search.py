@@ -3,9 +3,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from PIL import Image
-from typing import List, Tuple, Dict, Optional, NamedTuple
+from typing import List, Tuple, Dict
 from dataclasses import dataclass
-import itertools
+import random
 
 from tasks.task_utils import Task
 from utils import paste_shape
@@ -14,10 +14,6 @@ from utils import paste_shape
 class SearchType(Enum):
     CONJUNCTIVE = 'conjunctive'
     DISJUNCTIVE = 'disjunctive'
-
-class FeatureConjunction(NamedTuple):
-    color: str
-    shape: str
 
 @dataclass
 class SearchObject:
@@ -38,48 +34,19 @@ class SearchTrial:
         colors: List[str],
         shapes: List[str],
         size: int,
-        canvas_size: Tuple[int, int],
-        target_color: str,
-        target_shape: str
+        canvas_size: Tuple[int, int]
     ):
         self.search_type = search_type
         self.n_objects = n_objects
         self.trial_num = trial_num
         self.size = size
         self.canvas_size = canvas_size
+        self.colors = colors
+        self.shapes = shapes
         
-        # Use specified target properties
-        self.target_color = target_color
-        self.target_shape = target_shape
-        
-        # Create and place objects
-        self.objects = self._create_objects(colors, shapes)
-        
-    def __init__(
-        self,
-        search_type: SearchType,
-        n_objects: int,
-        trial_num: int,
-        colors: List[str],
-        shapes: List[str],
-        size: int,
-        canvas_size: Tuple[int, int],
-        target_color: str,
-        target_shape: str,
-        distractor_color: str,
-        distractor_shape: str
-    ):
-        self.search_type = search_type
-        self.n_objects = n_objects
-        self.trial_num = trial_num
-        self.size = size
-        self.canvas_size = canvas_size
-        
-        # Use specified target and distractor properties
-        self.target_color = target_color
-        self.target_shape = target_shape
-        self.distractor_color = distractor_color
-        self.distractor_shape = distractor_shape
+        # Randomly select target features
+        self.target_color = random.choice(colors)
+        self.target_shape = random.choice(shapes)
         
         # Create and place objects
         self.objects = self._create_objects()
@@ -97,57 +64,46 @@ class SearchTrial:
         # Pre-allocate positions array
         positions = np.zeros((self.n_objects, 2))
         
-        def get_valid_positions() -> np.ndarray:
-            max_attempts = 1000
-            
-            for i in range(self.n_objects):
-                attempts = 0
-                while attempts < max_attempts:
-                    # Generate random position
-                    pos = np.random.randint(
-                        [min_x, min_y], 
-                        [max_x, max_y], 
-                        size=2
-                    )
+        # Generate valid positions
+        for i in range(self.n_objects):
+            while True:
+                pos = np.random.randint([min_x, min_y], [max_x, max_y], size=2)
+                if i == 0:  # First object can go anywhere
+                    positions[i] = pos
+                    break
                     
-                    # For first object, accept any valid position
-                    if i == 0:
-                        positions[i] = pos
-                        break
-                        
-                    # Calculate distances to all existing positions
-                    distances = np.linalg.norm(positions[:i] - pos, axis=1)
-                    
-                    # Check if position is valid
-                    if np.all(distances >= self.size):
-                        positions[i] = pos
-                        break
-                        
-                    attempts += 1
-                    
-                if attempts == max_attempts:
-                    raise RuntimeError(f"Could not find valid position for object {i}")
-                    
-            return positions
+                # Check distance from all previous objects
+                distances = np.linalg.norm(positions[:i] - pos, axis=1)
+                if np.all(distances >= self.size):
+                    positions[i] = pos
+                    break
         
-        # Get all positions at once
-        positions = get_valid_positions()
+        objects = []
         
         # Create target object first
-        objects = [SearchObject(
+        objects.append(SearchObject(
             x=positions[0,0],
             y=positions[0,1],
             size=self.size,
             color=self.target_color,
             shape=self.target_shape,
             is_target=True
-        )]
+        ))
         
         # Create distractors
         for i in range(1, self.n_objects):
-            # Use pre-specified distractor features
-            color = self.distractor_color
-            shape = self.distractor_shape
+            if self.search_type == SearchType.CONJUNCTIVE:
+                # Share one feature with target
+                if random.random() < 0.5:
+                    color = self.target_color
+                    shape = random.choice([s for s in self.shapes if s != self.target_shape])
+                else:
+                    color = random.choice([c for c in self.colors if c != self.target_color])
+                    shape = self.target_shape
+            else:  # DISJUNCTIVE
+                # Share no features with target
+                color = random.choice([c for c in self.colors if c != self.target_color])
+                shape = random.choice([s for s in self.shapes if s != self.target_shape])
             
             objects.append(SearchObject(
                 x=positions[i,0],
@@ -172,33 +128,13 @@ class SearchTrial:
             'objects_data': [vars(obj) for obj in self.objects]
         }
 
-def get_valid_conjunctions(colors: List[str], shapes: List[str], search_type: SearchType) -> List[Tuple[FeatureConjunction, FeatureConjunction]]:
-    """Generate valid target-distractor feature conjunction pairs for a search type."""
-    all_conjunctions = [FeatureConjunction(c, s) for c, s in itertools.product(colors, shapes)]
-    valid_pairs = []
-    
-    for target in all_conjunctions:
-        for distractor in all_conjunctions:
-            shares_color = target.color == distractor.color
-            shares_shape = target.shape == distractor.shape
-            
-            if search_type == SearchType.CONJUNCTIVE:
-                # Must share exactly one feature
-                if shares_color ^ shares_shape:  # XOR
-                    valid_pairs.append((target, distractor))
-            else:  # DISJUNCTIVE
-                # Must share no features
-                if not (shares_color or shares_shape):
-                    valid_pairs.append((target, distractor))
-                    
-    return valid_pairs
 
 class SearchTask(Task):
     def __init__(
         self,
         min_objects: int,
         max_objects: int,
-        n_conjunction_repeats: int,
+        n_trials: int,
         size: int,
         colors: List[str],
         shapes: List[str],
@@ -252,26 +188,17 @@ class SearchTask(Task):
         
         for n_objects in range(self.min_objects, self.max_objects + 1):
             for search_type in SearchType:
-                # Get all valid target-distractor combinations for this search type
-                valid_pairs = get_valid_conjunctions(self.colors, self.shapes, search_type)
-                
-                # Create trials for each valid combination
-                for target, distractor in valid_pairs:
-                    for repeat in range(self.n_conjunction_repeats):
-                            trial = SearchTrial(
-                                search_type=search_type,
-                                n_objects=n_objects,
-                                trial_num=trial_counter,
-                                colors=self.colors,
-                                shapes=self.shapes,
-                                size=self.size,
-                                canvas_size=self.canvas_size,
-                                target_color=target.color,
-                                target_shape=target.shape,
-                                distractor_color=distractor.color,
-                                distractor_shape=distractor.shape
-                            )
-                            trial_counter += 1
+                for _ in range(self.n_trials):
+                    trial = SearchTrial(
+                        search_type=search_type,
+                        n_objects=n_objects,
+                        trial_num=trial_counter,
+                        colors=self.colors,
+                        shapes=self.shapes,
+                        size=self.size,
+                        canvas_size=self.canvas_size
+                    )
+                    
                     img = self.render_trial(trial)
                     
                     # Save image
@@ -280,6 +207,7 @@ class SearchTask(Task):
                     img.save(save_path)
                     
                     # Collect metadata
-                    metadata.append(trial.to_metadata(save_path))
+                    metadata.append(trial.to_metadata(str(save_path)))
+                    trial_counter += 1
         
         return pd.DataFrame(metadata)
