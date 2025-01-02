@@ -6,6 +6,8 @@ from PIL import Image
 from typing import List, Tuple, Dict
 from dataclasses import dataclass
 import random
+import numpy as np
+from matplotlib import colors as mcolors
 
 from tasks.task_utils import Task
 from utils import paste_shape, color_shape
@@ -162,13 +164,10 @@ class Search(Task):
         self.shape_inds = np.array(shape_inds)
         self.canvas_size = tuple(canvas_size)
         
-        # Define RGB values for each color
+        # Convert matplotlib named colors to RGB arrays
         self.color_map = {
-            'red': np.array([255, 0, 0]),
-            'green': np.array([0, 255, 0]),
-            'blue': np.array([0, 0, 255]),
-            'yellow': np.array([255, 255, 0]),
-            'purple': np.array([128, 0, 128])
+            name: np.array([int(255 * x) for x in mcolors.to_rgb(name)])
+            for name in colors
         }
         
         # Load shape images
