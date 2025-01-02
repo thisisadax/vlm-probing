@@ -144,7 +144,7 @@ class SearchTask(Task):
     ):
         self.min_objects = min_objects
         self.max_objects = max_objects
-        self.n_conjunction_repeats = n_conjunction_repeats
+        self.n_trials = n_trials
         self.size = size
         self.colors = colors
         self.shapes = shapes
