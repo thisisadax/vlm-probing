@@ -230,15 +230,15 @@ class Search(Task):
                             target_present=target_present
                         )
                     
-                    img = self.render_trial(trial)
-                    
-                    # Save image
-                    filename = f'n={n_objects}_type={search_type.value}_trial={trial_counter}.png'
-                    save_path = img_path / filename
-                    img.save(save_path)
-                    
-                    # Collect metadata
-                    metadata.append(trial.to_metadata(str(save_path)))
-                    trial_counter += 1
+                        img = self.render_trial(trial)
+                        
+                        # Save image with target presence info in filename
+                        filename = f'n={n_objects}_type={search_type.value}_trial={trial_counter}_target={target_present}.png'
+                        save_path = img_path / filename
+                        img.save(save_path)
+                        
+                        # Collect metadata
+                        metadata.append(trial.to_metadata(str(save_path)))
+                        trial_counter += 1
         
         return pd.DataFrame(metadata)
