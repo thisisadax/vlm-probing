@@ -169,6 +169,9 @@ class Search(Task):
         self.shape_imgs = np.load('data/imgs.npy')[self.shape_inds]
         self.shape_map = {shape: idx for idx, shape in enumerate(self.shapes)}
         
+        # Set prompt template for visual search task
+        self.prompt = "Is there a {target_color} {target_shape} in this image?"
+        
         super().__init__(**kwargs)
 
     def render_trial(self, trial: SearchTrial) -> Image.Image:
