@@ -172,22 +172,24 @@ class Search(Task):
         """Create image for a trial"""
         canvas = Image.new('RGB', self.canvas_size, 'white')
         
-        # Prepare all shapes at once
-        shape_indices = [self.shape_inds[self.shapes.index(obj.shape)] for obj in trial.objects]
-        positions = np.array([[obj.x, obj.y] for obj in trial.objects])
-        sizes = np.array([obj.size for obj in trial.objects])
-        
-        # Place all shapes in one go
-        for i, shape_idx in enumerate(shape_indices):
-            shape_img = self.shape_imgs[shape_idx]  # Get the actual shape image
-            paste_shape(
-                shape=shape_img,
-                positions=positions[i:i+1],
-                sizes=sizes[i:i+1],
-                canvas_img=canvas,
-                i=0,
-                img_size=trial.objects[i].size
-            )
+        # Place each object at its predetermined position
+        for obj in trial.objects:
+            # Get shape image and convert to PIL Image
+            shape_idx = self.shape_map[obj.shape]
+            shape_img = self.shape_imgs[shape_idx]
+            shape_pil = Image.fromarray(np.transpose(shape_img.astype(np.uint8), (1, 2, 0)))
+            
+            # Resize if needed
+            if shape_pil.size != (obj.size, obj.size):
+                shape_pil = shape_pil.resize((obj.size, obj.size))
+            
+            # Calculate top-left position for pasting
+            paste_x = obj.x - obj.size // 2
+            paste_y = obj.y - obj.size // 2
+            
+            # Paste the shape
+            canvas.paste(shape_pil, (paste_x, paste_y))
+            
         return canvas
 
     def get_prompt(self, row: pd.Series) -> str:
