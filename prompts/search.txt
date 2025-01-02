@@ -1,0 +1,5 @@
+You are presented with an image containing a set of colored shapes.
+Your task is to determine if there are any {target_color} {target_shape}'s in the image. Follow these steps carefully:
+1. Describe the color and shape of each object in the image.
+2. Conclude your response by stating [True] if any {target_shape}'s appears in {target_color}, or [False] if there are no {target_color} {target_shape}'s. 
+Enclose your final answer in square brackets, as shown.
