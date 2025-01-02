@@ -164,11 +164,6 @@ class Search(Task):
         self.shape_inds = np.array(shape_inds)
         self.canvas_size = tuple(canvas_size)
         
-        # Convert matplotlib named colors to RGB arrays
-        self.color_map = {
-            name: np.array([int(255 * x) for x in mcolors.to_rgb(name)])
-            for name in colors
-        }
         
         # Load shape images
         self.shape_imgs = np.load('data/imgs.npy')[self.shape_inds]
@@ -185,7 +180,7 @@ class Search(Task):
             # Get shape image and color it
             shape_idx = self.shape_map[obj.shape]
             shape_img = self.shape_imgs[shape_idx]  # This is a (32, 32) grayscale image
-            rgb_color = self.color_map[obj.color]
+            rgb_color = np.array([int(255 * x) for x in mcolors.to_rgb(obj.color)])
             colored_shape = color_shape(shape_img, rgb_color)  # Returns (3, H, W)
             
             # Convert to PIL Image
