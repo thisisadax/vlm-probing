@@ -179,8 +179,9 @@ class Search(Task):
         
         # Place all shapes in one go
         for i, shape_idx in enumerate(shape_indices):
+            shape_img = self.shape_imgs[shape_idx]  # Get the actual shape image
             paste_shape(
-                shape=np.array([shape_idx]),
+                shape=shape_img,
                 positions=positions[i:i+1],
                 sizes=sizes[i:i+1],
                 canvas_img=canvas,
