@@ -7,7 +7,7 @@ from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 
 from tasks.task_utils import Task
-from utils import paste_shape
+from utils import paste_shape, place_shapes
 
 class SearchType(Enum):
     CONJUNCTIVE = 'conjunctive'
