@@ -142,7 +142,7 @@ class SearchTrial:
         }
 
 
-class SearchTask(Task):
+class Search(Task):
     def __init__(
         self,
         n_objects: List[int],
@@ -160,7 +160,7 @@ class SearchTask(Task):
         self.colors = colors
         self.shapes = shapes
         self.shape_inds = np.array(shape_inds)
-        self.canvas_size = canvas_size
+        self.canvas_size = tuple(canvas_size)
         
         # Load shape images
         self.shape_imgs = np.load('data/imgs.npy')[self.shape_inds]
