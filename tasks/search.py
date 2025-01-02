@@ -63,44 +63,57 @@ class SearchTrial:
         min_y = margin
         max_y = self.canvas_size[1] - margin
         
-        # Keep track of occupied positions
-        occupied_positions = []
+        # Pre-allocate positions array
+        positions = np.zeros((self.n_objects, 2))
         
-        def get_valid_position():
+        def get_valid_positions() -> np.ndarray:
             max_attempts = 1000
-            attempts = 0
             
-            while attempts < max_attempts:
-                position = np.random.randint(
-                    [min_x, min_y], 
-                    [max_x, max_y], 
-                    size=2
-                ).reshape(1, -1)
-                
-                # Skip check if this is first position
-                if not occupied_positions:
-                    occupied_positions.append(position.squeeze())
-                    return position[0,0], position[0,1]
-                
-                # Calculate distances to all existing positions
-                existing = np.array(occupied_positions)
-                distances = np.linalg.norm(existing - position, axis=1)
-                
-                # Check if position is valid (far enough from all objects)
-                if np.all(distances >= self.size):
-                    occupied_positions.append(position.squeeze())
-                    return position[0,0], position[0,1]
-                
-                attempts += 1
-            
-            raise RuntimeError("Could not find valid position after 1000 attempts")
+            for i in range(self.n_objects):
+                attempts = 0
+                while attempts < max_attempts:
+                    # Generate random position
+                    pos = np.random.randint(
+                        [min_x, min_y], 
+                        [max_x, max_y], 
+                        size=2
+                    )
+                    
+                    # For first object, accept any valid position
+                    if i == 0:
+                        positions[i] = pos
+                        break
+                        
+                    # Calculate distances to all existing positions
+                    distances = np.linalg.norm(positions[:i] - pos, axis=1)
+                    
+                    # Check if position is valid
+                    if np.all(distances >= self.size):
+                        positions[i] = pos
+                        break
+                        
+                    attempts += 1
+                    
+                if attempts == max_attempts:
+                    raise RuntimeError(f"Could not find valid position for object {i}")
+                    
+            return positions
         
-        # Create target object
-        x, y = get_valid_position()
-        objects.append(SearchObject(x, y, self.size, self.target_color, self.target_shape, True))
+        # Get all positions at once
+        positions = get_valid_positions()
+        
+        # Create target object first
+        objects = [SearchObject(
+            x=positions[0,0],
+            y=positions[0,1],
+            size=self.size,
+            color=self.target_color,
+            shape=self.target_shape,
+            is_target=True
+        )]
         
         # Create distractors
-        for _ in range(self.n_objects - 1):
+        for i in range(1, self.n_objects):
             if self.search_type == SearchType.CONJUNCTIVE:
                 # Share one feature with target
                 if np.random.random() < 0.5:
@@ -114,8 +127,14 @@ class SearchTrial:
                 color = np.random.choice([c for c in colors if c != self.target_color])
                 shape = np.random.choice([s for s in shapes if s != self.target_shape])
             
-            x, y = get_valid_position()
-            objects.append(SearchObject(x, y, self.size, color, shape, False))
+            objects.append(SearchObject(
+                x=positions[i,0],
+                y=positions[i,1],
+                size=self.size,
+                color=color,
+                shape=shape,
+                is_target=False
+            ))
             
         return objects
     
