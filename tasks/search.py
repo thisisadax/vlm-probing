@@ -64,25 +64,36 @@ class SearchTrial:
         max_y = self.canvas_size[1] - margin
         
         # Keep track of occupied positions
-        occupied_positions = set()
+        occupied_positions = []
         
         def get_valid_position():
-            for _ in range(1000):  # Maximum attempts
-                x = np.random.randint(min_x, max_x)
-                y = np.random.randint(min_y, max_y)
-                
-                # Check if position is far enough from other objects
-                valid = True
-                for pos in occupied_positions:
-                    if np.sqrt((x - pos[0])**2 + (y - pos[1])**2) < self.size:
-                        valid = False
-                        break
-                
-                if valid:
-                    occupied_positions.add((x, y))
-                    return x, y
+            max_attempts = 1000
+            attempts = 0
             
-            raise RuntimeError("Could not find valid position")
+            while attempts < max_attempts:
+                position = np.random.randint(
+                    [min_x, min_y], 
+                    [max_x, max_y], 
+                    size=2
+                ).reshape(1, -1)
+                
+                # Skip check if this is first position
+                if not occupied_positions:
+                    occupied_positions.append(position.squeeze())
+                    return position[0,0], position[0,1]
+                
+                # Calculate distances to all existing positions
+                existing = np.array(occupied_positions)
+                distances = np.linalg.norm(existing - position, axis=1)
+                
+                # Check if position is valid (far enough from all objects)
+                if np.all(distances >= self.size):
+                    occupied_positions.append(position.squeeze())
+                    return position[0,0], position[0,1]
+                
+                attempts += 1
+            
+            raise RuntimeError("Could not find valid position after 1000 attempts")
         
         # Create target object
         x, y = get_valid_position()
