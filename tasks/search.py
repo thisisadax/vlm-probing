@@ -48,6 +48,10 @@ class SearchTrial:
         self.target_color = random.choice(colors)
         self.target_shape = random.choice(shapes)
         
+        # Select alternative features for distractors
+        self.alt_color = random.choice([c for c in colors if c != self.target_color])
+        self.alt_shape = random.choice([s for s in shapes if s != self.target_shape])
+        
         # Create and place objects
         self.objects = self._create_objects()
 
@@ -93,17 +97,17 @@ class SearchTrial:
         # Create distractors
         for i in range(1, self.n_objects):
             if self.search_type == SearchType.CONJUNCTIVE:
-                # Share one feature with target
+                # Share exactly one feature with target
                 if random.random() < 0.5:
                     color = self.target_color
-                    shape = random.choice([s for s in self.shapes if s != self.target_shape])
+                    shape = self.alt_shape
                 else:
-                    color = random.choice([c for c in self.colors if c != self.target_color])
+                    color = self.alt_color
                     shape = self.target_shape
             else:  # DISJUNCTIVE
                 # Share no features with target
-                color = random.choice([c for c in self.colors if c != self.target_color])
-                shape = random.choice([s for s in self.shapes if s != self.target_shape])
+                color = self.alt_color
+                shape = self.alt_shape
             
             objects.append(SearchObject(
                 x=positions[i,0],
