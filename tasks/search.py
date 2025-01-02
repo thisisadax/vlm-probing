@@ -57,9 +57,8 @@ class SearchTrial:
         # Create and place objects
         self.objects = self._create_objects()
 
-    def _create_objects(self) -> List[SearchObject]:
-        """Create objects for the trial with random positions"""
-        
+    def _generate_positions(self) -> np.ndarray:
+        """Generate non-overlapping positions for all objects"""
         # Calculate valid position range
         margin = self.size // 2
         min_x = margin
@@ -84,6 +83,11 @@ class SearchTrial:
                     positions[i] = pos
                     break
         
+        return positions
+
+    def _create_objects(self) -> List[SearchObject]:
+        """Create objects for the trial with random positions"""
+        positions = self._generate_positions()
         objects = []
         
         # Handle target present/absent cases
