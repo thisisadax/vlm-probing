@@ -2,7 +2,7 @@ task_name: search
 model_name: qwen
 min_objects: 4
 max_objects: 16
-n_trials: 10
+n_conjunction_repeats: 5
 size: 40
 colors:
   - red

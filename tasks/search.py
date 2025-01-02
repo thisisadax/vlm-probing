@@ -5,6 +5,7 @@ import pandas as pd
 from PIL import Image
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
+import itertools
 import numpy as np
 
 from tasks.task_utils import Task
@@ -34,16 +35,19 @@ class SearchTrial:
         colors: List[str],
         shapes: List[str],
         size: int,
-        canvas_size: Tuple[int, int]
+        canvas_size: Tuple[int, int],
+        target_color: str,
+        target_shape: str
     ):
         self.search_type = search_type
         self.n_objects = n_objects
         self.trial_num = trial_num
         self.size = size
+        self.canvas_size = canvas_size
         
-        # Select target properties
-        self.target_color = np.random.choice(colors)
-        self.target_shape = np.random.choice(shapes)
+        # Use specified target properties
+        self.target_color = target_color
+        self.target_shape = target_shape
         
         # Create and place objects
         self.objects = self._create_objects(colors, shapes)
@@ -155,7 +159,7 @@ class SearchTask(Task):
         self,
         min_objects: int,
         max_objects: int,
-        n_trials: int,
+        n_conjunction_repeats: int,
         size: int,
         colors: List[str],
         shapes: List[str],
@@ -165,7 +169,7 @@ class SearchTask(Task):
     ):
         self.min_objects = min_objects
         self.max_objects = max_objects
-        self.n_trials = n_trials
+        self.n_conjunction_repeats = n_conjunction_repeats
         self.size = size
         self.colors = colors
         self.shapes = shapes
@@ -204,20 +208,31 @@ class SearchTask(Task):
         img_path = Path(self.data_dir) / self.task_name / 'images'
         img_path.mkdir(parents=True, exist_ok=True)
         
+        # Generate all possible feature conjunctions
+        feature_conjunctions = list(itertools.product(self.colors, self.shapes))
+        n_conjunctions = len(feature_conjunctions)
+        
         metadata = []
+        trial_counter = 0
+        
         for n_objects in range(self.min_objects, self.max_objects + 1):
             for search_type in SearchType:
-                for trial_num in range(self.n_trials):
-                    # Generate and render trial
-                    trial = SearchTrial(
-                        search_type=search_type,
-                        n_objects=n_objects,
-                        trial_num=trial_num,
-                        colors=self.colors,
-                        shapes=self.shapes,
-                        size=self.size,
-                        canvas_size=self.canvas_size
-                    )
+                # For each feature conjunction as target
+                for target_color, target_shape in feature_conjunctions:
+                    # Repeat each conjunction n_conjunction_repeats times
+                    for repeat in range(self.n_conjunction_repeats):
+                        trial = SearchTrial(
+                            search_type=search_type,
+                            n_objects=n_objects,
+                            trial_num=trial_counter,
+                            colors=self.colors,
+                            shapes=self.shapes,
+                            size=self.size,
+                            canvas_size=self.canvas_size,
+                            target_color=target_color,
+                            target_shape=target_shape
+                        )
+                        trial_counter += 1
                     img = self.render_trial(trial)
                     
                     # Save image
