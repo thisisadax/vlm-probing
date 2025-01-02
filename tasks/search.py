@@ -10,6 +10,7 @@ import numpy as np
 from tasks.task_utils import Task
 from utils import paste_shape
 
+
 class SearchType(Enum):
     CONJUNCTIVE = 'conjunctive'
     DISJUNCTIVE = 'disjunctive'
@@ -22,7 +23,6 @@ class SearchObject:
     color: str
     shape: str
     is_target: bool
-
 
 class SearchTrial:
     """Represents a single search trial"""
