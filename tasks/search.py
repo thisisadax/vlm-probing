@@ -34,7 +34,8 @@ class SearchTrial:
         colors: List[str],
         shapes: List[str],
         size: int,
-        canvas_size: Tuple[int, int]
+        canvas_size: Tuple[int, int],
+        target_present: bool = True
     ):
         self.search_type = search_type
         self.n_objects = n_objects
@@ -43,6 +44,7 @@ class SearchTrial:
         self.canvas_size = canvas_size
         self.colors = colors
         self.shapes = shapes
+        self.target_present = target_present
         
         # Randomly select target features
         self.target_color = random.choice(colors)
@@ -84,18 +86,22 @@ class SearchTrial:
         
         objects = []
         
-        # Create target object first
-        objects.append(SearchObject(
-            x=positions[0,0],
-            y=positions[0,1],
-            size=self.size,
-            color=self.target_color,
-            shape=self.target_shape,
-            is_target=True
-        ))
+        # Handle target present/absent cases
+        start_idx = 0
+        if self.target_present:
+            # Create target object first
+            objects.append(SearchObject(
+                x=positions[0,0],
+                y=positions[0,1],
+                size=self.size,
+                color=self.target_color,
+                shape=self.target_shape,
+                is_target=True
+            ))
+            start_idx = 1
         
         # Create distractors
-        for i in range(1, self.n_objects):
+        for i in range(start_idx, self.n_objects):
             if self.search_type == SearchType.CONJUNCTIVE:
                 # Share exactly one feature with target
                 if random.random() < 0.5:
@@ -129,6 +135,7 @@ class SearchTrial:
             'trial': self.trial_num,
             'target_color': self.target_color,
             'target_shape': self.target_shape,
+            'target_present': self.target_present,
             'objects_data': [vars(obj) for obj in self.objects]
         }
 
@@ -193,15 +200,18 @@ class SearchTask(Task):
         for n_objects in range(self.min_objects, self.max_objects + 1):
             for search_type in SearchType:
                 for _ in range(self.n_trials):
-                    trial = SearchTrial(
-                        search_type=search_type,
-                        n_objects=n_objects,
-                        trial_num=trial_counter,
-                        colors=self.colors,
-                        shapes=self.shapes,
-                        size=self.size,
-                        canvas_size=self.canvas_size
-                    )
+                    # Create one target-present and one target-absent trial
+                    for target_present in [True, False]:
+                        trial = SearchTrial(
+                            search_type=search_type,
+                            n_objects=n_objects,
+                            trial_num=trial_counter,
+                            colors=self.colors,
+                            shapes=self.shapes,
+                            size=self.size,
+                            canvas_size=self.canvas_size,
+                            target_present=target_present
+                        )
                     
                     img = self.render_trial(trial)
                     
