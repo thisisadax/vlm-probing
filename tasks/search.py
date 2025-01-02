@@ -52,13 +52,37 @@ class SearchTrial:
         # Create and place objects
         self.objects = self._create_objects(colors, shapes)
         
-    def _create_objects(
+    def __init__(
         self,
+        search_type: SearchType,
+        n_objects: int,
+        trial_num: int,
         colors: List[str],
-        shapes: List[str]
-    ) -> List[SearchObject]:
+        shapes: List[str],
+        size: int,
+        canvas_size: Tuple[int, int],
+        target_color: str,
+        target_shape: str,
+        distractor_color: str,
+        distractor_shape: str
+    ):
+        self.search_type = search_type
+        self.n_objects = n_objects
+        self.trial_num = trial_num
+        self.size = size
+        self.canvas_size = canvas_size
+        
+        # Use specified target and distractor properties
+        self.target_color = target_color
+        self.target_shape = target_shape
+        self.distractor_color = distractor_color
+        self.distractor_shape = distractor_shape
+        
+        # Create and place objects
+        self.objects = self._create_objects()
+
+    def _create_objects(self) -> List[SearchObject]:
         """Create objects for the trial with random positions"""
-        objects = []
         
         # Calculate valid position range
         margin = self.size // 2
@@ -118,18 +142,9 @@ class SearchTrial:
         
         # Create distractors
         for i in range(1, self.n_objects):
-            if self.search_type == SearchType.CONJUNCTIVE:
-                # Share one feature with target
-                if np.random.random() < 0.5:
-                    color = self.target_color
-                    shape = np.random.choice([s for s in shapes if s != self.target_shape])
-                else:
-                    color = np.random.choice([c for c in colors if c != self.target_color])
-                    shape = self.target_shape
-            else:  # DISJUNCTIVE
-                # Share no features with target
-                color = np.random.choice([c for c in colors if c != self.target_color])
-                shape = np.random.choice([s for s in shapes if s != self.target_shape])
+            # Use pre-specified distractor features
+            color = self.distractor_color
+            shape = self.distractor_shape
             
             objects.append(SearchObject(
                 x=positions[i,0],
@@ -210,17 +225,31 @@ class SearchTask(Task):
         
         # Generate all possible feature conjunctions
         feature_conjunctions = list(itertools.product(self.colors, self.shapes))
-        n_conjunctions = len(feature_conjunctions)
         
         metadata = []
         trial_counter = 0
         
         for n_objects in range(self.min_objects, self.max_objects + 1):
             for search_type in SearchType:
-                # For each feature conjunction as target
+                # For each target feature conjunction
                 for target_color, target_shape in feature_conjunctions:
-                    # Repeat each conjunction n_conjunction_repeats times
-                    for repeat in range(self.n_conjunction_repeats):
+                    # For each distractor feature conjunction
+                    for distractor_color, distractor_shape in feature_conjunctions:
+                        # Skip invalid combinations based on search type
+                        if search_type == SearchType.CONJUNCTIVE:
+                            # For conjunctive search, distractor must share exactly one feature
+                            shares_color = distractor_color == target_color
+                            shares_shape = distractor_shape == target_shape
+                            if not (shares_color ^ shares_shape):  # XOR
+                                continue
+                        else:  # DISJUNCTIVE
+                            # For disjunctive search, distractor must share no features
+                            if (distractor_color == target_color or 
+                                distractor_shape == target_shape):
+                                continue
+                        
+                        # Create n_conjunction_repeats trials for this combination
+                        for repeat in range(self.n_conjunction_repeats):
                         trial = SearchTrial(
                             search_type=search_type,
                             n_objects=n_objects,
@@ -230,7 +259,9 @@ class SearchTask(Task):
                             size=self.size,
                             canvas_size=self.canvas_size,
                             target_color=target_color,
-                            target_shape=target_shape
+                            target_shape=target_shape,
+                            distractor_color=distractor_color,
+                            distractor_shape=distractor_shape
                         )
                         trial_counter += 1
                     img = self.render_trial(trial)
