@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import random
 
 from tasks.task_utils import Task
-from utils import paste_shape
+from utils import paste_shape, color_shape
 
 
 class SearchType(Enum):
