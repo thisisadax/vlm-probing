@@ -3,10 +3,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from PIL import Image
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, NamedTuple
 from dataclasses import dataclass
 import itertools
-import numpy as np
 
 from tasks.task_utils import Task
 from utils import paste_shape
@@ -15,6 +14,10 @@ from utils import paste_shape
 class SearchType(Enum):
     CONJUNCTIVE = 'conjunctive'
     DISJUNCTIVE = 'disjunctive'
+
+class FeatureConjunction(NamedTuple):
+    color: str
+    shape: str
 
 @dataclass
 class SearchObject:
@@ -169,6 +172,27 @@ class SearchTrial:
             'objects_data': [vars(obj) for obj in self.objects]
         }
 
+def get_valid_conjunctions(colors: List[str], shapes: List[str], search_type: SearchType) -> List[Tuple[FeatureConjunction, FeatureConjunction]]:
+    """Generate valid target-distractor feature conjunction pairs for a search type."""
+    all_conjunctions = [FeatureConjunction(c, s) for c, s in itertools.product(colors, shapes)]
+    valid_pairs = []
+    
+    for target in all_conjunctions:
+        for distractor in all_conjunctions:
+            shares_color = target.color == distractor.color
+            shares_shape = target.shape == distractor.shape
+            
+            if search_type == SearchType.CONJUNCTIVE:
+                # Must share exactly one feature
+                if shares_color ^ shares_shape:  # XOR
+                    valid_pairs.append((target, distractor))
+            else:  # DISJUNCTIVE
+                # Must share no features
+                if not (shares_color or shares_shape):
+                    valid_pairs.append((target, distractor))
+                    
+    return valid_pairs
+
 class SearchTask(Task):
     def __init__(
         self,
@@ -223,33 +247,17 @@ class SearchTask(Task):
         img_path = Path(self.data_dir) / self.task_name / 'images'
         img_path.mkdir(parents=True, exist_ok=True)
         
-        # Generate all possible feature conjunctions
-        feature_conjunctions = list(itertools.product(self.colors, self.shapes))
-        
         metadata = []
         trial_counter = 0
         
         for n_objects in range(self.min_objects, self.max_objects + 1):
             for search_type in SearchType:
-                # For each target feature conjunction
-                for target_color, target_shape in feature_conjunctions:
-                    # For each distractor feature conjunction
-                    for distractor_color, distractor_shape in feature_conjunctions:
-                        # Skip invalid combinations based on search type
-                        if search_type == SearchType.CONJUNCTIVE:
-                            # For conjunctive search, distractor must share exactly one feature
-                            shares_color = distractor_color == target_color
-                            shares_shape = distractor_shape == target_shape
-                            if not (shares_color ^ shares_shape):  # XOR
-                                continue
-                        else:  # DISJUNCTIVE
-                            # For disjunctive search, distractor must share no features
-                            if (distractor_color == target_color or 
-                                distractor_shape == target_shape):
-                                continue
-                        
-                        # Create n_conjunction_repeats trials for this combination
-                        for repeat in range(self.n_conjunction_repeats):
+                # Get all valid target-distractor combinations for this search type
+                valid_pairs = get_valid_conjunctions(self.colors, self.shapes, search_type)
+                
+                # Create trials for each valid combination
+                for target, distractor in valid_pairs:
+                    for repeat in range(self.n_conjunction_repeats):
                             trial = SearchTrial(
                                 search_type=search_type,
                                 n_objects=n_objects,
@@ -258,10 +266,10 @@ class SearchTask(Task):
                                 shapes=self.shapes,
                                 size=self.size,
                                 canvas_size=self.canvas_size,
-                                target_color=target_color,
-                                target_shape=target_shape,
-                                distractor_color=distractor_color,
-                                distractor_shape=distractor_shape
+                                target_color=target.color,
+                                target_shape=target.shape,
+                                distractor_color=distractor.color,
+                                distractor_shape=distractor.shape
                             )
                             trial_counter += 1
                     img = self.render_trial(trial)
