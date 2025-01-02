@@ -162,6 +162,15 @@ class Search(Task):
         self.shape_inds = np.array(shape_inds)
         self.canvas_size = tuple(canvas_size)
         
+        # Define RGB values for each color
+        self.color_map = {
+            'red': np.array([255, 0, 0]),
+            'green': np.array([0, 255, 0]),
+            'blue': np.array([0, 0, 255]),
+            'yellow': np.array([255, 255, 0]),
+            'purple': np.array([128, 0, 128])
+        }
+        
         # Load shape images
         self.shape_imgs = np.load('data/imgs.npy')[self.shape_inds]
         self.shape_map = {shape: idx for idx, shape in enumerate(self.shapes)}
@@ -174,15 +183,14 @@ class Search(Task):
         
         # Place each object at its predetermined position
         for obj in trial.objects:
-            # Get shape image and convert to PIL Image
+            # Get shape image and color it
             shape_idx = self.shape_map[obj.shape]
-            shape_img = self.shape_imgs[shape_idx]
+            shape_img = self.shape_imgs[shape_idx]  # This is a (32, 32) grayscale image
+            rgb_color = self.color_map[obj.color]
+            colored_shape = color_shape(shape_img, rgb_color)  # Returns (3, H, W)
             
-            # Handle different possible input formats
-            if shape_img.ndim == 3:  # If already in (H, W, C) format
-                shape_pil = Image.fromarray(shape_img.astype(np.uint8))
-            else:  # If in (C, H, W) format
-                shape_pil = Image.fromarray(shape_img.transpose(1, 2, 0).astype(np.uint8))
+            # Convert to PIL Image
+            shape_pil = Image.fromarray(colored_shape.transpose(1, 2, 0))
             
             # Resize if needed
             if shape_pil.size != (obj.size, obj.size):
