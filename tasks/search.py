@@ -202,8 +202,8 @@ class Search(Task):
     def get_prompt(self, row: pd.Series) -> str:
         """Format the prompt template with the target color and shape for this trial."""
         return self.prompt.format(
-            target_color=row['target_color'],
-            target_shape=row['target_shape']
+            target_color=row.target_color,
+            target_shape=row.target_shape
         )
         
     def generate_full_dataset(self) -> pd.DataFrame:
