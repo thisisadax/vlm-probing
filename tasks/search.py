@@ -177,7 +177,12 @@ class Search(Task):
             # Get shape image and convert to PIL Image
             shape_idx = self.shape_map[obj.shape]
             shape_img = self.shape_imgs[shape_idx]
-            shape_pil = Image.fromarray(np.transpose(shape_img.astype(np.uint8), (1, 2, 0)))
+            
+            # Handle different possible input formats
+            if shape_img.ndim == 3:  # If already in (H, W, C) format
+                shape_pil = Image.fromarray(shape_img.astype(np.uint8))
+            else:  # If in (C, H, W) format
+                shape_pil = Image.fromarray(shape_img.transpose(1, 2, 0).astype(np.uint8))
             
             # Resize if needed
             if shape_pil.size != (obj.size, obj.size):
