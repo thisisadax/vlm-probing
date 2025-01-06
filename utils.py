@@ -26,8 +26,6 @@ def collect_outputs(outputs, keys=['predictions', 'targets', 'attention', 'masks
     
     metadata = [{k: tensor_to_array(v) for k, v in batch['metadata'].items()} for batch in outputs]
     metadata = pd.concat([pd.DataFrame(x) for x in metadata])
-    print('metadata.shape: ', metadata.shape)
-    print('metadata: ', metadata)
     
     # Process each key
     tensors = {}

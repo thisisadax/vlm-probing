@@ -13,12 +13,12 @@ module load anaconda3/2024.6
 conda activate transformers
 export HYDRA_FULL_ERROR=1  # show full error traceback
 
-python run_probes.py dataset="tpr_classification" \
-        dataset.task_name="scene_description" \
+python run_probes.py \
+        dataset="tpr_classification" \
         probe="pooled_tpr_probe" \
+        dataset.task_name="search" \
         callbacks.model_checkpoint.monitor="val_acc" \
         trainer.max_epochs=100 \
         probe.lr=5e-4 \
-        dataset.batch_size=512 \
-        dataset.layer_name=null
-
+        dataset.batch_size=256 \
+        dataset.layer_name=null 

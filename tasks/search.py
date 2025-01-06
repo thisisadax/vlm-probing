@@ -59,7 +59,7 @@ class SearchTrial:
         # Create and place objects
         self.objects = self._create_objects()
 
-    def _generate_positions(self) -> np.ndarray:
+    def _generate_positions(self, buffer=5) -> np.ndarray:
         """Generate non-overlapping positions for all objects"""
         # Calculate valid position range
         margin = self.size // 2
@@ -81,10 +81,12 @@ class SearchTrial:
                     
                 # Check distance from all previous objects
                 distances = np.linalg.norm(positions[:i] - pos, axis=1)
-                if np.all(distances >= self.size):
+                if np.all(distances >= self.size+buffer):
                     positions[i] = pos
                     break
         
+        # Shuffle positions before returning
+        np.random.shuffle(positions)
         return positions
 
     def _create_objects(self) -> List[SearchObject]:
@@ -140,7 +142,7 @@ class SearchTrial:
             'target_color': self.target_color,
             'target_shape': self.target_shape,
             'target_present': self.target_present,
-            'objects_data': [vars(obj) for obj in self.objects]
+            'features': {f'object_{i}': vars(obj) for i, obj in enumerate(self.objects)}
         }
 
 

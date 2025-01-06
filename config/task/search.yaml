@@ -1,9 +1,20 @@
+defaults:
+  - default
+_target_: tasks.search.Search
 task_name: search
-model_name: qwen
+
+# Object parameters
 n_objects: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 n_trials: 100
-size: 40
-colors: [red, blue, green, yellow, purple]
+size: 45
+
+# Canvas parameters
+canvas_size: [512, 512]
+
+# Available shapes and colors
+colors: [red, blue, green, gold, purple]
 shapes: ['triangle', 'heart', 'star', 'circle', 'square']
 shape_inds: [9, 96, 98, 100, 101]
-canvas_size: [512, 512]
+
+# Prompt configuration
+prompt_path: '${.root_dir}/prompts/search.txt'

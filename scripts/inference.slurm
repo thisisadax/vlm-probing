@@ -13,4 +13,4 @@ module load anaconda3/2024.6
 conda activate transformers
 export HYDRA_FULL_ERROR=1  # show full error traceback
 
-python run_vlm.py task="scene_description" model="qwen" model.probe_layers=null
+python run_vlm.py task="search" model="qwen" model.probe_layers=null

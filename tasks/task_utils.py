@@ -42,7 +42,6 @@ class Task:
             print('Generating full dataset...')
             metadata_path = os.path.join(self.data_dir, self.task_name)
             os.makedirs(metadata_path, exist_ok=True)
-            print(metadata_path)
             self.results_df = self.generate_full_dataset()
             self.results_df.to_csv(task_path, index=False)
         return None
