@@ -155,6 +155,11 @@ class Qwen(Model):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False
         )
+        print(f'Number of objects: {batch_df.object_count.values[0]}')
+        print(f'Model estimate: {outputs[0][1]}')
+        print(f'path: {batch_df.path.values[0].split("/")[-1]}')
+        print(f'path: {batch_df.object.values}')
+        print('\n')
         
         # Add responses to DataFrame
         batch_df['response'] = outputs
@@ -184,7 +189,8 @@ class Qwen(Model):
         
         # Process each batch
         processed_batches = []
-        for i, batch_df in tqdm(enumerate(batches), total=len(batches)):
+        #for i, batch_df in tqdm(enumerate(batches), total=len(batches)):
+        for i, batch_df in enumerate(batches):
             # Run inference on batch
             processed_batch = self.run_batch(batch_df)
             processed_batches.append(processed_batch)

@@ -1,0 +1,2 @@
+How many {object}s are there in the following image? Return your answer as an integer enclosed in square brackets.
+For example, if there are 10 {object}s in the image, return [10].

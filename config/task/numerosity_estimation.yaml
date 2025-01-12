@@ -1,6 +1,6 @@
 defaults:
   - default
-_target_: tasks.numerosity.NumerosityTask
+_target_: tasks.numerosity_estimation.NumerosityTask
 task_name: 'numerosity_estimation' # Name of the task
 min_dots: 1
 max_dots: 10

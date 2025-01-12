@@ -1,0 +1,5 @@
+defaults:
+  - default
+_target_: tasks.pixmo_numerosity_estimation.PixmoNumerosityTask
+task_name: 'pixmo_numerosity_estimation' # Name of the task
+prompt_path: '${.root_dir}/prompts/pixmo_numerosity_estimation.txt'
