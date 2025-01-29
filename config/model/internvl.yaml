@@ -1,0 +1,5 @@
+defaults:
+  - default
+_target_: models.internvl.InternVL
+model_name: internvl
+probe_layers: null
