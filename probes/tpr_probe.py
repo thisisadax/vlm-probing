@@ -211,13 +211,18 @@ class TensorProductProbe(pl.LightningModule):
         
         if n_features == 0:
             return
+        
+        if hasattr(self, 'feature_conjunctions'):
+            feature_names = [self.feature_conjunctions[i] for i in feature_indices]
+        else:
+            feature_names = [f'Feature {i+1}' for i in range(n_features)]
             
         # Get corresponding attention maps and image path
         attention_maps = outputs['attention'][idx][feature_indices].cpu().numpy()
         image_path = outputs['metadata']['path'].values[idx]
         
         # Plot the attention maps
-        fig = self._plot_masked_data(attention_maps, image_path)
+        fig = self._plot_masked_data(attention_maps, image_path, feature_names)
         
         # Save the figure
         os.makedirs(self.output_dir, exist_ok=True)
@@ -225,7 +230,7 @@ class TensorProductProbe(pl.LightningModule):
         plt.savefig(output_path)
         plt.close()
 
-    def _plot_masked_data(self, attention_maps, image_path):
+    def _plot_masked_data(self, attention_maps, image_path, feature_names):
         '''
         Create a figure with attention maps for each feature present in the image
         alongside the input image.
@@ -263,7 +268,8 @@ class TensorProductProbe(pl.LightningModule):
             # Plot attention heatmap
             im = axes[i+1].imshow(square_attention, cmap='RdBu_r')
             fig.colorbar(im, ax=axes[i+1])
-            axes[i+1].set_title(f'Feature {i+1} Attention', fontsize=14)
+            # axes[i+1].set_title(f'Feature {i+1} Attention', fontsize=14)
+            axes[i+1].set_title(f'{feature_names[i]} Attention', fontsize=14)
             axes[i+1].axis('off')
         
         plt.tight_layout()
