@@ -151,11 +151,11 @@ class InternVL(Model):
                 self.save_activations()
                 self.save_counter += 1
         
-        # Combine all processed batches
-        final_df = pd.concat(processed_batches, axis=0, ignore_index=True)
-        
-        # Save results to CSV
-        final_df.to_csv(self.task.results_path, index=False)
+            # Combine all processed batches
+            final_df = pd.concat(processed_batches, axis=0, ignore_index=True)
+            
+            # Save results to CSV
+            final_df.to_csv(self.task.results_path, index=False)
         
         # Save concatenated image masks
         if self.image_masks:
