@@ -46,12 +46,12 @@ class TPRDatasets(ProbeDatasets):
         
         # Create conjunction strings for each object
         # Use this version if you have keys for the objects
-        #df['conjunctions'] = df.features.apply(
-        #    lambda objs: [f'{obj["shape"]}_{obj["color"]}' for obj in objs.values()]
-        #)
         df['conjunctions'] = df.features.apply(
-            lambda objs: [f'{obj["shape"]}_{obj["color"]}' for obj in objs]
+           lambda objs: [f'{obj["shape"]}_{obj["color"]}' for obj in objs.values()]
         )
+        # df['conjunctions'] = df.features.apply(
+        #     lambda objs: [f'{obj["shape"]}_{obj["color"]}' for obj in objs]
+        # )
         
         # Get unique conjunctions across all trials
         unique_conjunctions = sorted(df.conjunctions.explode().unique())
