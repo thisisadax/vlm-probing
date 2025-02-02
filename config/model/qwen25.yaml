@@ -1,7 +1,7 @@
 defaults:
   - default
-_target_: models.qwen.Qwen
-model_name: qwen
+_target_: models.qwen.Qwen25
+model_name: qwen25
 probe_layers: {
   'early_mlp': ['model', 'layers', '2'],
   'intermediate_mlp': ['model', 'layers', '12'],

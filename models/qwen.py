@@ -9,7 +9,10 @@ from typing import Dict, List
 import torch
 from transformers import AutoProcessor
 from qwen_vl_utils import process_vision_info
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+from transformers import (
+    Qwen2VLForConditionalGeneration,
+    Qwen2_5_VLForConditionalGeneration, AutoProcessor
+)
 
 from models.model import Model
 from tasks.task_utils import Task
@@ -41,8 +44,7 @@ class Qwen(Model):
         # Initialize model and processor
         self.model = Qwen2VLForConditionalGeneration.from_pretrained('Qwen/Qwen2-VL-7B-Instruct', 
                                                                      torch_dtype='auto', 
-                                                                     device_map='auto', 
-                                                                     local_files_only=True)
+                                                                     device_map='auto')
         self.processor = AutoProcessor.from_pretrained('Qwen/Qwen2-VL-7B-Instruct') 
 
         # Set probe layers - either use provided config or detect all MLPs
@@ -62,7 +64,7 @@ class Qwen(Model):
         # Create probe config for each layer
         for layer_idx in range(num_layers):
             layer_name = f'layer-{layer_idx}'
-            probe_config[layer_name] = ['model', 'layers', str(layer_idx), 'mlp', 'down_proj']
+            probe_config[layer_name] = ['model', 'layers', str(layer_idx)] #, 'mlp', 'down_proj']
             
         return probe_config
     
@@ -155,10 +157,10 @@ class Qwen(Model):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False
         )
-        print(f'Number of objects: {batch_df.object_count.values[0]}')
-        print(f'Model estimate: {outputs[0][1]}')
+        print(f'Number of objects: {batch_df.n_objects.values[0]}')
+        print(f'Model estimate: {outputs[0]}')
         print(f'path: {batch_df.path.values[0].split("/")[-1]}')
-        print(f'path: {batch_df.object.values}')
+        # print(f'path: {batch_df.object.values}')
         print('\n')
         
         # Add responses to DataFrame
@@ -200,11 +202,11 @@ class Qwen(Model):
                 self.save_activations()
                 self.save_counter += 1
         
-        # Combine all processed batches
-        final_df = pd.concat(processed_batches, axis=0, ignore_index=True)
-        
-        # Save results to CSV
-        final_df.to_csv(self.task.results_path, index=False)
+            # Combine all processed batches
+            final_df = pd.concat(processed_batches, axis=0, ignore_index=True)
+            
+            # Save results to CSV
+            final_df.to_csv(self.task.results_path, index=False)
         
         # Save concatenated image masks
         if self.image_masks:
@@ -249,3 +251,40 @@ class Qwen(Model):
         
         # Clear the activation buffer after saving
         self.activations = {}
+
+
+class Qwen25(Qwen):
+
+    def __init__(
+        self,
+        task: Task,
+        max_tokens: int = 128,
+        batch_size: int = 32,
+        probe_layers: Dict = None,
+        device: str = None,
+        model_name: str = None,
+        save_interval: int = 10
+    ):
+        self.image_masks = []
+        Model.__init__(self, task)
+        self.max_new_tokens = max_tokens
+        self.batch_size = batch_size
+        self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
+        self.activations = {}
+        self.save_counter = 1
+        self.save_interval = save_interval
+        self.prompt = Path
+        self.model_name = model_name
+
+        # Initialize model and processor
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained('Qwen/Qwen2.5-VL-7B-Instruct', 
+                                                                     torch_dtype='auto', 
+                                                                     device_map='auto')
+        self.processor = AutoProcessor.from_pretrained('Qwen/Qwen2.5-VL-7B-Instruct') 
+
+        # Set probe layers - either use provided config or detect all MLPs
+        self.probe_layers = probe_layers if probe_layers is not None else self._detect_all_mlp_layers()
+        
+        # Register hooks if probe_layers are specified
+        if self.probe_layers:
+            self._register_hooks()
