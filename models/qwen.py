@@ -10,6 +10,7 @@ import torch
 from transformers import AutoProcessor
 from qwen_vl_utils import process_vision_info
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+import torch.nn.functional as F
 
 from models.model import Model
 from tasks.task_utils import Task
@@ -105,8 +106,8 @@ class Qwen(Model):
                 if isinstance(output, tuple):
                     output = output[0]
                 
-                # Only collect if sequence length == 1 (not generation phase)
-                if output.size(1) == 1:
+                # Only collect if sequence length != 1 (not generation phase)
+                if output.size(1) != 1:
                     output = output.detach().cpu()
                     try:
                         self.activations[name].append(output)
@@ -128,7 +129,7 @@ class Qwen(Model):
                     attn_weights = output[1]
                     if attn_weights is not None:
                         # Only collect during generation phase (sequence length == 1)
-                        if attn_weights.size(1) == 1:
+                        if attn_weights.size(2) == 1:
                             attn_weights = attn_weights.detach().cpu()
                             try:
                                 self.activations[name].append(attn_weights)
@@ -210,11 +211,6 @@ class Qwen(Model):
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False
         )
-        print(f'Number of objects: {batch_df.object_count.values[0]}')
-        print(f'Model estimate: {outputs[0][1]}')
-        print(f'path: {batch_df.path.values[0].split("/")[-1]}')
-        print(f'path: {batch_df.object.values}')
-        print('\n')
         
         # Add responses to DataFrame
         batch_df['response'] = outputs
@@ -228,7 +224,7 @@ class Qwen(Model):
             {
                 'role': 'user',
                 'content': [
-                    {'type': 'image', 'image': f"file://{row['path']}"},
+                    {'type': 'image', 'image': f'file://{row.path}'},
                     {'type': 'text', 'text': self.task.get_prompt(row)},
                 ],
             }
@@ -244,14 +240,13 @@ class Qwen(Model):
         
         # Process each batch
         processed_batches = []
-        #for i, batch_df in tqdm(enumerate(batches), total=len(batches)):
-        for i, batch_df in enumerate(batches):
+        for i, batch_df in tqdm(enumerate(batches), total=len(batches), desc='Processing batches'):
             # Run inference on batch
             processed_batch = self.run_batch(batch_df)
             processed_batches.append(processed_batch)
             
             # Save activations based on save_interval
-            if self.probe_layers and (i+1) % self.save_interval == 0:
+            if self.probe_layers and (i+1) % self.save_interval==0:
                 self.save_activations()
                 self.save_counter += 1
         
@@ -287,8 +282,17 @@ class Qwen(Model):
         
         for layer, layer_activations in self.activations.items():
             try:
-                # Stack activations maintaining BxTxD shape
-                activations = torch.cat(layer_activations, dim=0)
+                # Pad and reshape the attention maps if saving attention weights.
+                if self.probe_type == 'attention':
+                    max_len = max([act.shape[-1] for act in layer_activations])
+                    layer_activations = [F.pad(act, (0, max_len - act.shape[-1]), value=float('nan')).mean(1)
+                                        for act in layer_activations]
+                    activations = torch.concatenate(layer_activations, dim=1)
+                    activations = activations.reshape(self.batch_size, -1, self.save_interval, max_len)
+
+                # otherwise, just stack the activations, maintaining BxTxD shape
+                else:
+                    activations = torch.cat(layer_activations, dim=0)
                 
                 # Create layer-specific directory
                 layer_dir = os.path.join(outpath, layer)
