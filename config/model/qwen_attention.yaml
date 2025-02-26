@@ -3,8 +3,7 @@ defaults:
 _target_: models.qwen.Qwen
 model_name: qwen
 probe_type: attention
-probe_layers: {
-  'early_attn': ['model', 'layers', '2', 'self_attn'],
-  'intermediate_attn': ['model', 'layers', '12', 'self_attn'],
-  'late_attn': ['model', 'layers', '27', 'self_attn'],
-}
+probe_layers:
+  early_attn: ['model', 'layers', '2', 'self_attn']
+  intermediate_attn: ['model', 'layers', '12', 'self_attn']
+  late_attn: ['model', 'layers', '27', 'self_attn']
