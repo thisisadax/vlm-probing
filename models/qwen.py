@@ -89,35 +89,53 @@ class Qwen(Model):
     
 
     def _get_activations(self, name):
+        """Return the appropriate hook function based on the layer type."""
+        if 'attn' in name:
+            return self._get_attention_hook(name)
+        else:
+            return self._get_mlp_hook(name)
+    
+    def _get_mlp_hook(self, name):
+        """Hook function for MLP layers.
+        Captures activations during the non-generation phase (sequence length > 1).
+        """
         def hook(model, input, output):
             try:
-                # Handle different output formats based on module type
-                if 'attn' in name:
-                    # For attention modules, extract attention weights (index 1 in the tuple)
-                    if isinstance(output, tuple) and len(output) > 1:
-                        # Get attention weights
-                        attn_weights = output[1]
-                        if attn_weights is not None:
-                            # Only collect if sequence length > 1 (not generation phase)
-                            if attn_weights.size(1) == 1:
-                                attn_weights = attn_weights.detach().cpu()
-                                try:
-                                    self.activations[name].append(attn_weights)
-                                except KeyError:
-                                    self.activations[name] = [attn_weights]
-                else:
-                    # For MLP modules, extract the first output if it's a tuple
-                    if isinstance(output, tuple):
-                        output = output[0]
-                    # Only collect if sequence length > 1 (not generation phase)
-                    if output.size(1) == 1:
-                        output = output.detach().cpu()
-                        try:
-                            self.activations[name].append(output)
-                        except KeyError:
-                            self.activations[name] = [output]     
+                # Extract the first output if it's a tuple
+                if isinstance(output, tuple):
+                    output = output[0]
+                
+                # Only collect if sequence length == 1 (not generation phase)
+                if output.size(1) == 1:
+                    output = output.detach().cpu()
+                    try:
+                        self.activations[name].append(output)
+                    except KeyError:
+                        self.activations[name] = [output]
             except Exception as e:
-                print(f'Error in hook for {name}: {str(e)}')
+                print(f'Error in MLP hook for {name}: {str(e)}')
+        return hook
+    
+    def _get_attention_hook(self, name):
+        """Hook function for attention layers.
+        Captures attention weights during the generation phase (sequence length == 1).
+        """
+        def hook(model, input, output):
+            try:
+                # For attention modules, extract attention weights (index 1 in the tuple)
+                if isinstance(output, tuple) and len(output) > 1:
+                    # Get attention weights
+                    attn_weights = output[1]
+                    if attn_weights is not None:
+                        # Only collect during generation phase (sequence length == 1)
+                        if attn_weights.size(1) == 1:
+                            attn_weights = attn_weights.detach().cpu()
+                            try:
+                                self.activations[name].append(attn_weights)
+                            except KeyError:
+                                self.activations[name] = [attn_weights]
+            except Exception as e:
+                print(f'Error in attention hook for {name}: {str(e)}')
         return hook
 
 
