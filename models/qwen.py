@@ -73,7 +73,7 @@ class Qwen(Model):
                 if isinstance(output, tuple):
                     output = output[0]
                 # Only collect if sequence length > 1 (not generation phase)
-                if output.size(1) > 1:
+                if output.size(1) == 1:
                     output = output.detach().cpu()
                     try:
                         self.activations[name].append(output)
