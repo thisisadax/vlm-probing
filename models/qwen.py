@@ -289,33 +289,35 @@ class Qwen(Model):
             try:
                 # Handle attention weights differently due to variable sequence lengths
                 if self.probe_type == 'attention':
-                    # Group activations by sequence length
-                    seq_length_groups = {}
-                    for act in layer_activations:
-                        seq_len = act.shape[-1]
-                        if seq_len not in seq_length_groups:
-                            seq_length_groups[seq_len] = []
-                        seq_length_groups[seq_len].append(act)
+                    # First, average across attention heads for each activation
+                    averaged_acts = [act.mean(1) for act in layer_activations]  # Shape: [batch, 1, seq_len]
                     
-                    # Process each group separately
-                    processed_groups = {}
-                    for seq_len, acts in seq_length_groups.items():
-                        # Average across attention heads (dim=1)
-                        acts = [act.mean(1) for act in acts]  # Remove attention head dimension
-                        # Concatenate along batch dimension
-                        if acts:
-                            processed_groups[seq_len] = torch.cat(acts, dim=0)
+                    # Find the maximum context length across all activations
+                    max_context_length = max(act.shape[-1] for act in averaged_acts)
                     
-                    # Save each group separately with sequence length info
+                    # Pad each activation to the maximum context length
+                    padded_acts = []
+                    for act in averaged_acts:
+                        # Calculate padding needed
+                        pad_size = max_context_length - act.shape[-1]
+                        if pad_size > 0:
+                            # Pad with NaN values
+                            padded_act = F.pad(act, (0, pad_size), value=float('nan'))
+                        else:
+                            padded_act = act
+                        padded_acts.append(padded_act)
+                    
+                    # Concatenate all padded activations into a single tensor
+                    # Shape: [total_batch_size, 1, max_context_length]
+                    activations = torch.cat(padded_acts, dim=0)
+                    
+                    # Create layer-specific directory
                     layer_dir = os.path.join(outpath, layer)
                     os.makedirs(layer_dir, exist_ok=True)
                     
-                    for seq_len, tensor in processed_groups.items():
-                        save_path = os.path.join(
-                            layer_dir, 
-                            f'{self.save_counter:04d}_seqlen_{seq_len}.pt'
-                        )
-                        torch.save(tensor, save_path)
+                    # Save to disk as PyTorch tensor
+                    save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
+                    torch.save(activations, save_path)
                 
                 # For non-attention activations, just stack as before
                 else:
