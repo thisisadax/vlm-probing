@@ -130,13 +130,18 @@ class Qwen(Model):
                     if attn_weights is not None:
                         # Only collect during generation phase (sequence length == 1)
                         if attn_weights.size(2) == 1:
+                            # Store the detached weights on CPU
                             attn_weights = attn_weights.detach().cpu()
-                            try:
-                                self.activations[name].append(attn_weights)
-                            except KeyError:
-                                self.activations[name] = [attn_weights]
+                            
+                            # Initialize the layer's activation list if it doesn't exist
+                            if name not in self.activations:
+                                self.activations[name] = []
+                                
+                            # Append the current attention weights
+                            self.activations[name].append(attn_weights)
             except Exception as e:
                 print(f'Error in attention hook for {name}: {str(e)}')
+                traceback.print_exc()
         return hook
 
 
@@ -282,25 +287,47 @@ class Qwen(Model):
         
         for layer, layer_activations in self.activations.items():
             try:
-                # Pad and reshape the attention maps if saving attention weights.
+                # Handle attention weights differently due to variable sequence lengths
                 if self.probe_type == 'attention':
-                    max_len = max([act.shape[-1] for act in layer_activations])
-                    layer_activations = [F.pad(act, (0, max_len - act.shape[-1]), value=float('nan')).mean(1)
-                                        for act in layer_activations]
-                    activations = torch.concatenate(layer_activations, dim=1)
-                    activations = activations.reshape(self.batch_size, -1, self.save_interval, max_len)
-
-                # otherwise, just stack the activations, maintaining BxTxD shape
+                    # Group activations by sequence length
+                    seq_length_groups = {}
+                    for act in layer_activations:
+                        seq_len = act.shape[-1]
+                        if seq_len not in seq_length_groups:
+                            seq_length_groups[seq_len] = []
+                        seq_length_groups[seq_len].append(act)
+                    
+                    # Process each group separately
+                    processed_groups = {}
+                    for seq_len, acts in seq_length_groups.items():
+                        # Average across attention heads (dim=1)
+                        acts = [act.mean(1) for act in acts]  # Remove attention head dimension
+                        # Concatenate along batch dimension
+                        if acts:
+                            processed_groups[seq_len] = torch.cat(acts, dim=0)
+                    
+                    # Save each group separately with sequence length info
+                    layer_dir = os.path.join(outpath, layer)
+                    os.makedirs(layer_dir, exist_ok=True)
+                    
+                    for seq_len, tensor in processed_groups.items():
+                        save_path = os.path.join(
+                            layer_dir, 
+                            f'{self.save_counter:04d}_seqlen_{seq_len}.pt'
+                        )
+                        torch.save(tensor, save_path)
+                
+                # For non-attention activations, just stack as before
                 else:
                     activations = torch.cat(layer_activations, dim=0)
-                
-                # Create layer-specific directory
-                layer_dir = os.path.join(outpath, layer)
-                os.makedirs(layer_dir, exist_ok=True)
-                
-                # Save to disk as PyTorch tensor with unique counter
-                save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
-                torch.save(activations, save_path)
+                    
+                    # Create layer-specific directory
+                    layer_dir = os.path.join(outpath, layer)
+                    os.makedirs(layer_dir, exist_ok=True)
+                    
+                    # Save to disk as PyTorch tensor with unique counter
+                    save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
+                    torch.save(activations, save_path)
                 
             except Exception as e:
                 print(f'Error saving {layer}: {str(e)}')
