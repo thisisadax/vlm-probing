@@ -23,6 +23,7 @@ class Qwen(Model):
         max_tokens: int = 128,
         batch_size: int = 32,
         probe_layers: Dict = None,
+        probe_type: str = 'mlp',
         device: str = None,
         model_name: str = None,
         save_interval: int = 10
@@ -37,6 +38,7 @@ class Qwen(Model):
         self.save_interval = save_interval
         self.prompt = Path
         self.model_name = model_name
+        self.probe_type = probe_type
 
         # Initialize model and processor
         self.model = Qwen2VLForConditionalGeneration.from_pretrained('Qwen/Qwen2-VL-7B-Instruct', 
@@ -45,8 +47,13 @@ class Qwen(Model):
                                                                      local_files_only=True)
         self.processor = AutoProcessor.from_pretrained('Qwen/Qwen2-VL-7B-Instruct') 
 
-        # Set probe layers - either use provided config or detect all MLPs
-        self.probe_layers = probe_layers if probe_layers is not None else self._detect_all_mlp_layers()
+        # Set probe layers based on configuration
+        if probe_layers is not None:
+            self.probe_layers = probe_layers
+        elif self.probe_type == 'attention':
+            self.probe_layers = self._detect_all_attention_heads()
+        else:  # Default to MLP
+            self.probe_layers = self._detect_all_mlp_layers()
         
         # Register hooks if probe_layers are specified
         if self.probe_layers:
@@ -61,8 +68,22 @@ class Qwen(Model):
         
         # Create probe config for each layer
         for layer_idx in range(num_layers):
-            layer_name = f'layer-{layer_idx}'
+            layer_name = f'mlp-layer-{layer_idx}'
             probe_config[layer_name] = ['model', 'layers', str(layer_idx), 'mlp', 'down_proj']
+            
+        return probe_config
+    
+    def _detect_all_attention_heads(self) -> Dict:
+        '''Detect all self-attention modules in the model and create a probe configuration.'''
+        probe_config = {}
+        
+        # Get number of layers in the model
+        num_layers = len(self.model.model.layers)
+        
+        # Create probe config for each layer's attention module
+        for layer_idx in range(num_layers):
+            layer_name = f'attn-layer-{layer_idx}'
+            probe_config[layer_name] = ['model', 'layers', str(layer_idx), 'self_attn']
             
         return probe_config
     
@@ -70,15 +91,31 @@ class Qwen(Model):
     def _get_activations(self, name):
         def hook(model, input, output):
             try:
-                if isinstance(output, tuple):
-                    output = output[0]
-                # Only collect if sequence length > 1 (not generation phase)
-                if output.size(1) == 1:
-                    output = output.detach().cpu()
-                    try:
-                        self.activations[name].append(output)
-                    except KeyError:
-                        self.activations[name] = [output]     
+                # Handle different output formats based on module type
+                if 'attn' in name:
+                    # For attention modules, extract attention weights (index 1 in the tuple)
+                    if isinstance(output, tuple) and len(output) > 1:
+                        # Get attention weights
+                        attn_weights = output[1]
+                        if attn_weights is not None:
+                            # Only collect if sequence length > 1 (not generation phase)
+                            if attn_weights.size(1) == 1:
+                                attn_weights = attn_weights.detach().cpu()
+                                try:
+                                    self.activations[name].append(attn_weights)
+                                except KeyError:
+                                    self.activations[name] = [attn_weights]
+                else:
+                    # For MLP modules, extract the first output if it's a tuple
+                    if isinstance(output, tuple):
+                        output = output[0]
+                    # Only collect if sequence length > 1 (not generation phase)
+                    if output.size(1) == 1:
+                        output = output.detach().cpu()
+                        try:
+                            self.activations[name].append(output)
+                        except KeyError:
+                            self.activations[name] = [output]     
             except Exception as e:
                 print(f'Error in hook for {name}: {str(e)}')
         return hook

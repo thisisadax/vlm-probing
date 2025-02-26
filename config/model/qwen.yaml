@@ -2,6 +2,7 @@ defaults:
   - default
 _target_: models.qwen.Qwen
 model_name: qwen
+probe_type: mlp  # Options: 'mlp' or 'attention'
 probe_layers: {
   'early_mlp': ['model', 'layers', '2', 'mlp', 'down_proj'],
   'intermediate_mlp': ['model', 'layers', '12', 'mlp', 'down_proj'],
