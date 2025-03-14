@@ -40,7 +40,6 @@ class Qwen(Model):
         self.prompt = Path
         self.model_name = model_name
         self.probe_type = probe_type
-
         # Initialize model and processor
         self.model = Qwen2VLForConditionalGeneration.from_pretrained('Qwen/Qwen2-VL-7B-Instruct', 
                                                                      torch_dtype='auto', 
@@ -130,20 +129,14 @@ class Qwen(Model):
                     if attn_weights is not None:
                         # Only collect during generation phase (sequence length == 1)
                         if attn_weights.size(2) == 1:
-                            # Store the detached weights on CPU
                             attn_weights = attn_weights.detach().cpu()
-                            
-                            # Initialize the layer's activation list if it doesn't exist
-                            if name not in self.activations:
-                                self.activations[name] = []
-                                
-                            # Append the current attention weights
-                            self.activations[name].append(attn_weights)
+                            try:
+                                self.activations[name].append(attn_weights)
+                            except KeyError:
+                                self.activations[name] = [attn_weights]
             except Exception as e:
                 print(f'Error in attention hook for {name}: {str(e)}')
-                traceback.print_exc()
         return hook
-
 
     def _register_hooks(self):
         '''Register forward hooks for specified layers.'''
@@ -152,7 +145,6 @@ class Qwen(Model):
                 layer_path = layer_path.split('.')
             target = reduce(get_attr_or_item, layer_path, self.model)
             target.register_forward_hook(self._get_activations(layer_name))
-
 
     def get_image_mask(self, input_ids: torch.Tensor) -> torch.Tensor:
         '''Compute binary mask indicating image token positions.'''
@@ -221,7 +213,6 @@ class Qwen(Model):
         batch_df['response'] = outputs
         return batch_df
 
-
     def _encode_trial(self, row) -> List[dict]:
         '''Convert a dataframe row into the expected message format.'''
         return [
@@ -275,6 +266,71 @@ class Qwen(Model):
         
         return final_df
 
+    def pad_activations(self, layer_activations):
+        '''
+        Reorganize attention activations by detecting sequence length changes.
+        Handles cases where batch items generate different numbers of tokens.
+        
+        Args:
+            layer_activations: List of attention activation tensors
+            
+        Returns:
+            Tensor of shape [batch_size, max_tokens_per_item, n_heads, max_seq_len]
+        '''
+        if not layer_activations:
+            return None
+        
+        # Get dimensions
+        batch_size = layer_activations[0].shape[0]
+        n_heads = layer_activations[0].shape[1]
+        
+        # Step 1: Get sequence lengths for all activations
+        seq_lens = torch.tensor([act.shape[-1] for act in layer_activations])
+        
+        # Step 2: Detect where sequence length decreases (indicating batch boundaries)
+        seq_diffs = seq_lens[1:] - seq_lens[:-1]
+        batch_boundaries = torch.where(seq_diffs < 0)[0] + 1
+        
+        # Step 3: Split activations into generation rounds
+        if len(batch_boundaries) == 0:
+            # Only one round or incomplete data
+            rounds = [range(len(layer_activations))]
+        else:
+            rounds = []
+            start_idx = 0
+            
+            for boundary in batch_boundaries:
+                rounds.append(range(start_idx, boundary.item()))
+                start_idx = boundary.item()
+                
+            # Add the final round
+            if start_idx < len(layer_activations):
+                rounds.append(range(start_idx, len(layer_activations)))
+        
+        # Step 4: Assign activations to batch items
+        max_tokens = abs(min(seq_diffs)) + 1
+        max_seq_len = max(seq_lens).item()
+        item_tokens = [[] for _ in range(max_tokens)]
+
+        # Step 5: Pad each batch and add them to a unified tensor
+        all_batches = []
+        for round_indices in rounds:
+
+            # Step 5a: Pad the sequence dimension for the batch
+            batch = []
+            for ind in round_indices:
+                seq_pad = max_seq_len - layer_activations[ind].shape[-1]
+                step_attn = F.pad(layer_activations[ind], (0, seq_pad), value=float('nan'))
+                batch.append(step_attn)
+            batch = torch.cat(batch, dim=2)
+
+            # Step 5b: Pad the token dimension for the batch to max number of tokens across all batches.
+            token_pad = max_tokens - batch.shape[2]
+            batch = F.pad(batch, (0, token_pad, 0, 0), value=float('nan'))
+            all_batches.append(batch)
+        output = torch.cat(all_batches, dim=0)
+        return output
+
     def save_activations(self):
         '''Save extracted activations to disk as PyTorch tensors and clear buffer.'''
         outpath = os.path.join(
@@ -287,53 +343,28 @@ class Qwen(Model):
         
         for layer, layer_activations in self.activations.items():
             try:
-                # Handle attention weights differently due to variable sequence lengths
+                # Create layer-specific directory
+                layer_dir = os.path.join(outpath, layer)
+                os.makedirs(layer_dir, exist_ok=True)
+                
                 if self.probe_type == 'attention':
-                    # First, average across attention heads for each activation
-                    averaged_acts = [act.mean(1) for act in layer_activations]  # Shape: [batch, 1, seq_len]
-                    
-                    # Find the maximum context length across all activations
-                    max_context_length = max(act.shape[-1] for act in averaged_acts)
-                    
-                    # Pad each activation to the maximum context length
-                    padded_acts = []
-                    for act in averaged_acts:
-                        # Calculate padding needed
-                        pad_size = max_context_length - act.shape[-1]
-                        if pad_size > 0:
-                            # Pad with NaN values
-                            padded_act = F.pad(act, (0, pad_size), value=float('nan'))
-                        else:
-                            padded_act = act
-                        padded_acts.append(padded_act)
-                    
-                    # Concatenate all padded activations into a single tensor
-                    # Shape: [total_batch_size, 1, max_context_length]
-                    activations = torch.cat(padded_acts, dim=0)
-                    
-                    # Create layer-specific directory
-                    layer_dir = os.path.join(outpath, layer)
-                    os.makedirs(layer_dir, exist_ok=True)
-                    
-                    # Save to disk as PyTorch tensor
-                    save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
-                    torch.save(activations, save_path)
-                
-                # For non-attention activations, just stack as before
+                    # Use our new padding method
+                    padded_activations = self.pad_activations(layer_activations)
+                    if padded_activations is not None:
+                        save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
+                        torch.save(padded_activations, save_path)
+                        print(f'Saved attention activations with shape: {padded_activations.shape}')
                 else:
+                    # For MLP activations, keep the existing code
                     activations = torch.cat(layer_activations, dim=0)
-                    
-                    # Create layer-specific directory
-                    layer_dir = os.path.join(outpath, layer)
-                    os.makedirs(layer_dir, exist_ok=True)
-                    
-                    # Save to disk as PyTorch tensor with unique counter
                     save_path = os.path.join(layer_dir, f'{self.save_counter:04d}.pt')
                     torch.save(activations, save_path)
-                
+                    
             except Exception as e:
                 print(f'Error saving {layer}: {str(e)}')
                 traceback.print_exc()
-        
+                for i, act in enumerate(layer_activations):
+                    print(f'Layer {i} activation shape: {act.shape}')
+            
         # Clear the activation buffer after saving
         self.activations = {}
